@@ -32,6 +32,14 @@ description: Profile CodinGame bots and validate performance changes under reali
 9. Alternate or interleave baseline/candidate measurements to reduce thermal and
    background-load bias. Avoid concurrent matches that create unrepresentative contention.
 
+When the platform starts a fresh process per game, reproduce that lifetime for timing-sensitive
+strength checks, especially after adding work outside the cooperative turn timer. Compare the
+same maps/seats against a same-session control; do not extrapolate a continuously warmed local
+bench to the platform. Inspect completed search work and budget saturation by game phase as
+well as response times: zero timeouts can coexist with much less search and weaker decisions.
+Back Track King's `docs/cold-timing-30x20-v1.md` (2026-10-22, retained at `2fc4980`) demonstrated
+this distinction; its board dimensions and millisecond budgets are not general defaults.
+
 ## Optimize and validate
 
 10. Use profiler evidence to select a bottleneck. Form a specific hypothesis and

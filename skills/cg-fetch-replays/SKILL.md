@@ -72,6 +72,28 @@ do not universalize Back Track King's observed terminal -1 score. Cover this in 
 Store source game ID, agent IDs, slot mapping and capture origin; analyze each uploaded arena
 entry separately. Do not mix boss games into arena-strength statistics by default.
 
+## Preserve arena uploads before replacing them
+
+Before an authorized upload, archive the live entry's battle list and available canonical
+replays. In Back Track King, replacing the live agent made its battle list empty; previously
+downloaded games remained the only available evidence. Verify the current game's API behavior,
+but do not rely on being able to discover an old upload's games after replacing it.
+
+Store each upload separately with its agent ID, artifact/build and configuration hashes,
+submission/fetch times, league, placement-completion state and rating snapshots. Preserve the
+first observed completed-placement snapshot as that upload's placement result; later ratings
+are separate observations. Partial-placement imports are historical context, not interchangeable
+completed placements. Do not replace missing results with a later score or an estimate.
+
+Re-uploading one artifact creates another upload of the same configuration, not a new strategy.
+Check configuration identity before grouping/relabeling uploads; keep distinct build hashes,
+agent IDs and upload numbers. Record opponent-rating provenance and timestamp: a rating obtained
+at fetch time is not necessarily the rating at match time. Resume downloads by game ID and keep
+request budgets/backoff separate from the promotion decision. Use `cg-promote-bot` to interpret
+repeated placements; fetching evidence does not authorize an upload or rollback.
+
+Source: Back Track King `docs/arena-uploads.md`, adopted 2026-10-27 (repository commit `2fc4980`).
+
 ## IDE / boss replay capture
 
 Observed working flow in Back Track King:

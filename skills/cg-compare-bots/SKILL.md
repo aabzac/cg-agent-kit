@@ -59,5 +59,8 @@ Write a compact entry at the project-defined experiment location with:
 
 Report unavailable harness capabilities or missing measurements explicitly. Do not
 claim a platform ranking gain from a local comparison alone. For a promotion decision, apply the
-project's policy; `cg-promote-bot` describes the preferred practical 300/1000 protocol and the
-common-opponent and boss gates.
+project's adopted policy; `cg-promote-bot` describes staged screens, fresh replication,
+regression guards and repeated arena placements, plus explicitly named alternative protocols.
+Keep a fresh replication pool independent of the screen that selected the candidate. Preserve
+each pool's matched results; pool them only under the declared rule. Arena matchmaking is not
+a paired-seed experiment, so keep those observations separate from local matched series.

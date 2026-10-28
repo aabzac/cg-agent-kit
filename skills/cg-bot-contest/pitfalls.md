@@ -12,6 +12,11 @@
 - Self-play may not reproduce the arena meta (e.g. game length, aggression). Compare your
   self-play stats with replay stats (`cgStudy`) and build a reference opponent that matches the
   meta before trusting benches for meta-dependent features.
+- Do not diagnose a proxy's failure from one selected local winner losing live. Replicate the
+  fixed candidate on fresh maps with a same-run control before changing the proxy. In Back Track
+  King's `docs/boss-v4.md` (2026-10-26), two apparent gains reversed on replication; a replay
+  action-agreement gap in already-won tails did not establish a strength-prediction defect.
+  Keep the original numbers and explicitly correct the superseded interpretation.
 - Win rate and average score diff can disagree (robust-but-low-scoring styles). In win/loss
   games only the win rate matters; large negative score diffs still deserve a look for blunders.
 - Parallel arena timing can show JIT/GC contention outliers. Align nominal search budgets first,
@@ -83,6 +88,7 @@
 - Documentation volume: when DEVLOG/BOTS exceed a few hundred KB, the STATUS page and a
   reverse-chronological experiment index are mandatory, or the arena state gets lost (in Back
   Track King the arena ran an older candidate for two weeks while the selected version's upload
-  stayed unticked).
+  stayed unticked). Archive closed periods losslessly; distinguish selected version, current
+  arena agent/configuration and pending upload rather than appending history to the active status.
 - When the next step requires the user's upload or arena observation, identify the verified
   artifact and the requested action; do not silently start another tuning cycle.

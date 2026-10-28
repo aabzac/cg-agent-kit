@@ -1,5 +1,10 @@
 # Project architecture (Java 17 + Gradle reference)
 
+Contents: [Commands](#gradle-tasks-properties-via--pnamevalue),
+[Core interfaces](#core-interfaces), [Referee / arena](#referee--arena),
+[Submission artifact](#submission-artifact), [Experiment lifecycle](#experiment-lifecycle),
+[Visualizer](#visualizer).
+
 ```
 src/main/java/<pkg>/core      GameState, Action, Rules, Pathing, Protocol        ships to CG
 src/main/java/<pkg>/bot       Bot, Params, Timer, MainBot, BotFactory
@@ -94,6 +99,33 @@ text blocks, token boundaries and code adjacent to comments; naive line/regex de
 general Java minifier. Compile and test representative semantics, then rerun process checks after
 packaging changes. A successful compile alone does not establish behavior preservation. Do not
 promise a particular size limit or copy a contest-specific compaction shortcut into all projects.
+
+## Experiment lifecycle
+
+Keep active strategy code, retained reference opponents and historical evidence distinct.
+Retire rejected or parked mechanisms from active code deliberately when their maintenance or
+submission-size cost matters. Keep an immutable runnable version for references still used by
+the benchmark panel or by reproducibility checks; closed research can remain in recorded Git
+history. Reject retired flags on active versions instead of silently accepting a no-op.
+
+Move or remove mechanism-specific tests together with intentionally retired code. Keep tests for
+the selected bot, retained proxies/references, engine, protocol, packaging and frozen-version
+identity. Never remove a failing test for retained behavior merely to obtain a green suite.
+For behavior-preserving cleanup, compare fixed-state decisions with enough time to finish,
+verify unchanged retained submission hashes where byte identity is intended, then repeat the
+appropriate timed/process checks when emitted code changes. Equal parameters alone do not prove
+equal executable behavior. Keep the result as a cleanup verdict, not a strength promotion.
+
+Commit compact protocols, results and machine-readable evidence needed to reconstruct decisions.
+Keep large replay corpora/archives under the project's storage policy; record their size, SHA-256
+and durable retrieval location or Git provenance in a manifest. Keep required regression fixtures
+available to a clean checkout instead of depending on an ignored local archive. Ignoring a file
+does not preserve it elsewhere, and untracking files does not remove them from Git history.
+Archive closed journal periods without losing their text or links; leave an index and only
+current decisions in STATUS/PLAN. Preserve old verdicts and attach later corrections explicitly.
+
+Source lesson: Back Track King at `2fc4980`, `docs/repo-cleanup-v1.md` and `docs/prune-v1.md`.
+Its exact retention set, file-size limit and local commit policy are project choices.
 
 ## Visualizer
 

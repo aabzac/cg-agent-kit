@@ -1,6 +1,6 @@
 ---
 name: cg-promote-bot
-description: Plan CodinGame bot experiments and decide promotions with predeclared evidence rules, the preferred practical 300/1000 protocol, matched common-opponent and boss gates, meta-matched opponents and aligned timing. Use when deciding whether a candidate replaces the selected submission, designing a screen or confirmation, interpreting benchmarks, or diagnosing local results that disagree with the arena.
+description: Plan CodinGame bot experiments and promotions through validated proxy screens, fresh replication, regression guards and repeated arena placements. Use when deciding whether a candidate replaces the selected submission, defining promotion or rollback criteria, interpreting benchmarks, or diagnosing local results that disagree with the arena.
 ---
 
 # Experiments, evidence and promotion
@@ -36,47 +36,72 @@ If using sequential testing, choose a method with appropriate stopping rules bef
 post-mortem gets an explicit iteration budget on development maps first; its zeroth iteration
 (e.g. one that leaves paint unspent) measures nothing about the idea.
 
-## Preferred practical 300/1000 protocol
+## Select and freeze the project's promotion policy
 
-This is the user's preferred practical selection policy, not a statistical test with an overall
-95% error guarantee. Use it when requested or when establishing a new project's policy; an
-existing explicit project policy takes precedence until deliberately updated. Record adoption
-in project rules, reports and decision tooling. Confidence intervals remain descriptive diagnostics.
-Current revision: `practical-300-1000-v2`, with a strict >52% continuation floor after 300 games.
+Read the adopted policy id, amendment date, thresholds and authorization boundaries from
+`.ai/project.md`. Do not combine gates from different revisions or rewrite old verdicts.
+If no policy exists, propose the staged workflow below and record the chosen parameters before
+measuring. Sample sizes and margins are contest settings, not universal constants.
 
-1. Freeze candidate A, selected control B, and an older or behaviorally different opponent C.
-   Predeclare fresh representative map pools, both sides per map, identical nominal time budgets,
-   workers, full parameters and all branch rules. Draws count as half a win.
-2. A vs B: exactly 300 games / 150 distinct maps. A score >=60% passes the direct stage.
-   A score <=52% stops evaluation: retain the candidate/evidence, with no automatic continuation.
-   Only for 52% < score <60%, run separate fixed 1000 games / 500 new maps: pass at >=55%
-   in those 1000 alone. Exactly 52% stops; exactly 60% passes the direct stage.
-   Do not pool the 300 with the 1000, tune between stages, retry failures or stop early on a
-   running win rate. A completed direct-stage failure stops promotion evaluation.
-3. After direct-stage success, run A vs C and B vs C, 300 games each, on the SAME new 150 maps,
-   sides, seeds, C parameters, timing profile and worker count. Compare matched per-map scores.
-   Candidate minus control >=3 percentage points passes this stage. This margin is a chosen
-   practical cutoff, not a confidence interval or proof of superiority.
-4. Otherwise run A vs C and B vs C, 1000 games each, on the SAME separate new 500 maps.
-   Use only this larger matched sample: pass if candidate score >= control score; a tie passes.
-   If it fails, retain the candidate and evidence without promotion or another automatic retry.
-5. Both strength stages are required. Fast passage of the first 300 skips only the direct 1000;
-   it never skips the common-opponent, error, engine-fidelity or exact-artifact process checks.
-   Preserve project authorization boundaries: passing checks does not authorize arena upload
-   or silently changing the selected submission.
+For the latest Back Track King procedure and its exact numbers, read
+[the dated policy reference](references/back-track-king-policy.md). It supersedes that contest's
+80/120-game live-confirmation stage with a short live filter and repeated arena placements.
+Projects explicitly using `practical-300-1000-v2` retain
+[that alternative](references/practical-300-1000.md); it is a separate policy, not BTK v4.
 
-The 52% floor is a cost/sensitivity tradeoff, not proof that a stopped candidate is weak or an
-empirically optimal threshold. Prefer it over 53% when avoiding premature rejection matters:
-one percentage point is only three win-equivalent points in 300 games. A higher floor saves
-more work but discards more borderline candidates. Choose it before play; do not adjust it to
-rescue or reject a seen result. It applies only to the first direct 300, not to the 1000-game
-55% threshold or the common-opponent stages. Preserve historical policy ids and decisions.
+### Stage the evidence from cheap screens to the target population
 
-Reuse a completed 300-game screen only when explicitly applying a newly adopted rule to an
-existing candidate: verify unchanged implementation/configuration, label the policy change as
-retrospective, preserve the old verdict, and use fresh maps for all subsequent stages. A prior
-unmatched opponent percentage cannot substitute for either member of the matched comparison.
-Record all outcomes and the selected branch; inconclusive old evidence is not proof of no gain.
+1. Establish engine fidelity, zero bot errors, source-size compliance and a strict process check
+   of the exact submission. Check cold-start costs before expensive strength testing. Give a new
+   heuristic an explicit development budget, then freeze it before the promotion series.
+2. Validate the screening opponent against the relevant live population: behavior fingerprints,
+   performance against the selected version, and known candidate ordering. Record the validation
+   id and invalidate it when the proxy, boss, league or relevant meta changes. A proxy equal to
+   the candidate cannot screen that candidate; use the project's declared fallback or stop.
+3. Screen candidate and selected control against that proxy on identical fresh maps, seeds,
+   seats and resource limits, with both arms measured in the same run. Apply the declared
+   practical effect threshold; preserve all tried arms, not just the winner.
+4. Replicate a passing frozen arm on a new map pool with the same proxy and matched control
+   before spending scarce live/API games. Require the declared replication and pooled-effect
+   criteria. A failed replication stops the candidate under this policy; do not retune it and
+   still call the next run independent confirmation. Pool only when the policy specifies how.
+5. Run the selected-version regression guard on its own fresh paired pool. The mirror is a
+   guard against damaging existing play, not the sole objective for meta-motivated changes.
+   A practical score floor is not a statistical proof of non-inferiority.
+6. Use a short paired live session as a filter when the project requires one. Match the maps,
+   seeds and seats, refresh the control in the same session, and apply its continuation rule.
+   Passing a noisy boss filter does not prove improvement against the arena population.
+7. Evaluate the candidate through the declared number of separate arena placements of the
+   SAME verified artifact. Before EVERY Submit, including a repeat or rollback, save the current
+   live entry and available replays; old agent history may disappear. Use `cg-fetch-replays`.
+   Keep the selected rollback artifact available throughout the trial.
+8. Record each upload's agent id, artifact hash, source/configuration identity, league, time,
+   placement-completion signal and FIRST completed placement score. Multiple snapshots of one
+   upload are not multiple placements. Do not mix partial-placement scores with completed ones.
+9. Apply the predeclared arena rule only after the required candidate and baseline evidence is
+   complete, except for an explicitly allowed early rollback. Compare per-upload mean placement
+   scores; report any policy-required opponent-adjusted performance and its model assumptions. A raw win rate
+   can change simply because the matchmaker served different opponents.
+10. Estimate placement noise from repeated uploads of an unchanged configuration/build, using
+    a declared calibration cohort/window and margin rule. Keep model uncertainty separate from
+    upload-to-upload variability; two placements give a fragile noise estimate. Missing required
+    baseline placements, rating inputs or uncertainty estimates mean pending evidence, not an automatic
+    pass. Label any predeclared provisional margin as provisional.
+11. Follow the declared rollback/promotion logic exactly. A practical policy may promote when
+    all gates pass and the candidate is not clearly worse; do not silently add a significance
+    requirement for superiority or claim superiority from that decision. Keep the failure rule's
+    AND/OR conditions explicit. Early rollback replaces the remaining candidate trial, not the
+    obligation to preserve evidence and restore the verified selected artifact.
+12. Record the decision, then freeze source AND effective parameters, update pins/defaults and
+    the version catalog under the project's authorization. Relabel upload evidence only after
+    checking configuration identity and code comparability. A promoted default may have a new
+    display/build marker; revalidate the rebuilt artifact and log its upload separately. Passing
+    checks does not itself authorize an upload or promotion; use existing user authorization.
+
+Keep one candidate summary: policy revision, hypothesis, all arms, proxy validation id, each
+stage's pools/results, artifact hashes, upload ids, margin calibration, final verdict and next
+action. Preserve rejected evidence. Amend policies prospectively; label retrospective reuse of
+old screens explicitly and preserve the original verdict alongside the re-evaluation.
 
 ## 2. Preserve paired evidence and independent map coverage
 
@@ -117,11 +142,11 @@ unchanged boss ID cannot rule out hidden updates. A required local continuation
 may overlap a sequential remote batch; isolate strict process timing checks and predeclare
 completion/stopping rules for both branches. Boss success cannot rescue a failed direct gate.
 
-Live boss gates are noisy. 40 games carry a standard error of about 7.5-8 pp, so a 95% interval
-is roughly ±15 pp; in Back Track King an unchanged control drifted between 11 and 17 wins of 40
-over weeks. Use 80-120 or more paired games (same maps, seeds and seats as a fresh control) for
-decisions; 40 games are a screen. Refresh the cached control after any outcome-guided development
-on its maps.
+Live boss gates are noisy: in Back Track King an unchanged control ranged from 11 to 17 wins
+of 40 across sessions. Use the policy's current continuation rule and paired uncertainty, not
+a universal game-count prescription. Its 2026-10-27 policy uses 40 games only as a live filter
+and moves final selection to repeated arena placements; 80/120-game confirmation is historical.
+Refresh cached controls after outcome-guided development on their maps.
 
 ## 3. Check that local benches measure the arena
 
@@ -134,9 +159,12 @@ lesson of that contest.
 
 If the meta differs, build and **validate** a meta-matched local opponent: fit its decisions on
 the boss/leader replay corpus and check that it reproduces the stats and the known ordering of
-past candidates. Decision rule for meta-motivated mechanisms: non-inferiority versus self
-(>=48-50%) AND a gain versus the proxy, then live confirmation. Record which rule applies to a
-candidate before play.
+past candidates. For meta-motivated mechanisms, use a declared regression guard versus self
+alongside proxy gain, fresh replication and the project's live/arena stages. Record the complete
+rule before play. Check fresh replication and stratify diagnostic states before blaming the proxy:
+a replay action-agreement gap can come from different game phases or already-decided positions,
+while a failed live transfer can come from selecting a noisy screen winner. Revalidate a changed
+proxy against behavior AND predictive candidate ordering; better action agreement alone is not enough.
 
 ## 4. Separate fidelity, mechanism and population strength
 

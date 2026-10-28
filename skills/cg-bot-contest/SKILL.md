@@ -13,7 +13,7 @@ Game-specific weights, time limits and the numbers quoted from past contests are
 
 Related skills: `cg-fetch-replays` (CG API, replay corpora, boss and IDE capture),
 `cg-validate-simulator` (engine fidelity), `cg-compare-bots` (paired series),
-`cg-promote-bot` (evidence rules and the preferred practical 300/1000 protocol) and
+`cg-promote-bot` (staged project promotion, replication and repeated arena placements) and
 `cg-profile-bot` (timing). Layout and interfaces are in [architecture.md](architecture.md);
 read [pitfalls.md](pitfalls.md) before the first bench or when diagnosing runtime/engine issues.
 
@@ -58,8 +58,10 @@ Build in this order; each item is small and unblocks the next.
    STATUS is half a page: arena entry, league, boss id and rating, selected version, last verdict,
    flags on. Keep it current; otherwise agents reconstruct state from megabytes of log and get it
    wrong.
-7. Use the project's version-control workflow; commit when requested. Large replay corpora and
-   `build/` can be gitignored; preserve compact regression fixtures and experiment evidence.
+7. Use the project's version-control workflow; commit when requested or explicitly authorized
+   by that project's standing policy. Keep compact regression fixtures and decision evidence;
+   store large corpora/exports according to the project's storage policy with recoverable
+   locations and checksums. See the experiment-lifecycle section in [architecture.md](architecture.md).
 
 ## Phase 2 — leagues
 
@@ -91,7 +93,9 @@ a time:
    source-size limits; repeat artifact checks after packaging changes. See
    [architecture.md](architecture.md).
 5. Record outcomes (including inconclusive/rejected experiments) in BOTS/DEVLOG/STATUS and update
-   PLAN. Leave unpromoted flags off; do not silently replace the known-good submission.
+   PLAN. Leave unpromoted flags off; do not silently replace the known-good submission. Review
+   closed experiments for removal from active code rather than accumulating disabled branches;
+   preserve the retained references and their verification as described in [architecture.md](architecture.md).
 
 ## Opponent model and search
 
@@ -139,7 +143,7 @@ it there), otherwise in `AGENTS.md`.
 - One hypothesis → one recorded experiment; a promoted strategy gets a new frozen version.
 - Reference source and effective parameters are immutable; use explicit overrides for ablations.
 - Bench at the submission's nominal search budget; process IO/warm-up checks are additional.
-  Screen meta-motivated mechanisms against a validated meta-matched opponent and confirm them live
-  with enough paired games.
+  Screen meta-motivated mechanisms against a validated meta-matched opponent, replicate gains,
+  and follow the project's live-filter and arena-evaluation policy. Preserve each upload's evidence.
 - Hot path allocation-free; keep the timer margin; `submit` + `procCheck` before every paste.
 - Write everything down (also failures). Statement text verbatim per league; keep STATUS current.
