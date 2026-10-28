@@ -36,9 +36,12 @@ When the platform starts a fresh process per game, reproduce that lifetime for t
 strength checks, especially after adding work outside the cooperative turn timer. Compare the
 same maps/seats against a same-session control; do not extrapolate a continuously warmed local
 bench to the platform. Inspect completed search work and budget saturation by game phase as
-well as response times: zero timeouts can coexist with much less search and weaker decisions.
-Back Track King's `docs/cold-timing-30x20-v1.md` (2026-10-22, retained at `2fc4980`) demonstrated
-this distinction; its board dimensions and millisecond budgets are not general defaults.
+well as response times: zero timeouts can coexist with much less search. Measure any strength
+cost separately with a paired fresh-process series. In Back Track King's
+`docs/cold-timing-30x20-v1.md` (2026-10-22), 34% of later turns on 30x20 maps hit the search
+ceiling without a timeout, but 172 cold games could not size the strength loss (-7.0 ± 12.5 pp),
+and a fresh control of the unchanged configuration moved +9.3 pp between two runs. Its board
+dimensions and millisecond budgets are not general defaults.
 
 ## Optimize and validate
 

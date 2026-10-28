@@ -48,9 +48,11 @@
 - Use the project's dated promotion policy. Keep proxy validity, fresh replication,
   regression checks and arena evidence distinct; practical cutoffs are not proofs
   of superiority. Preserve old verdicts when the policy or its interpretation changes.
-- Save the live entry's evidence before replacing it. Track the selected baseline,
-  currently uploaded agent and pending candidate separately. Record each upload's
-  artifact/configuration identity and placement state before comparing arena results.
+- Save the live entry's evidence before replacing it, and follow each upload through
+  placement: a league promotion can also replace the agent. Compare arena scores only
+  within one league. Track the selected baseline, currently uploaded agent and pending
+  candidate separately. Record each upload's artifact/configuration identity, league
+  and placement state before comparing arena results.
 - Keep compact machine-readable evidence and decision summaries in Git. Store heavy
   corpora/archives at a declared durable location with hashes and retrieval details;
   archive closed log periods without losing evidence or breaking references.

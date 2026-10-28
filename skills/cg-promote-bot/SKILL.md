@@ -1,6 +1,6 @@
 ---
 name: cg-promote-bot
-description: Plan CodinGame bot experiments and promotions through validated proxy screens, fresh replication, regression guards and repeated arena placements. Use when deciding whether a candidate replaces the selected submission, defining promotion or rollback criteria, interpreting benchmarks, or diagnosing local results that disagree with the arena.
+description: Plan CodinGame bot experiments and promotions through validated proxy screens, fresh replication, regression guards and repeated arena placements compared within one league. Use when deciding whether a candidate replaces the selected submission, defining promotion or rollback criteria, interpreting benchmarks or arena uploads, or diagnosing local results that disagree with the arena.
 ---
 
 # Experiments, evidence and promotion
@@ -36,7 +36,7 @@ If using sequential testing, choose a method with appropriate stopping rules bef
 post-mortem gets an explicit iteration budget on development maps first; its zeroth iteration
 (e.g. one that leaves paint unspent) measures nothing about the idea.
 
-## Select and freeze the project's promotion policy
+## 2. Select and freeze the project's promotion policy
 
 Read the adopted policy id, amendment date, thresholds and authorization boundaries from
 `.ai/project.md`. Do not combine gates from different revisions or rewrite old verdicts.
@@ -46,8 +46,8 @@ measuring. Sample sizes and margins are contest settings, not universal constant
 For the latest Back Track King procedure and its exact numbers, read
 [the dated policy reference](references/back-track-king-policy.md). It supersedes that contest's
 80/120-game live-confirmation stage with a short live filter and repeated arena placements.
-Projects explicitly using `practical-300-1000-v2` retain
-[that alternative](references/practical-300-1000.md); it is a separate policy, not BTK v4.
+Projects that explicitly adopted `practical-300-1000-v2`, BTK's superseded September policy,
+keep [that alternative](references/practical-300-1000.md); do not mix it with BTK v4 or v5.
 
 ### Stage the evidence from cheap screens to the target population
 
@@ -73,20 +73,25 @@ Projects explicitly using `practical-300-1000-v2` retain
    Passing a noisy boss filter does not prove improvement against the arena population.
 7. Evaluate the candidate through the declared number of separate arena placements of the
    SAME verified artifact. Before EVERY Submit, including a repeat or rollback, save the current
-   live entry and available replays; old agent history may disappear. Use `cg-fetch-replays`.
-   Keep the selected rollback artifact available throughout the trial.
+   live entry and available replays; old agent history may disappear. Then watch the new upload
+   through placement: a league promotion at its end can replace the agent and drop its games.
+   Use `cg-fetch-replays`. Keep the selected rollback artifact available throughout the trial.
 8. Record each upload's agent id, artifact hash, source/configuration identity, league, time,
    placement-completion signal and FIRST completed placement score. Multiple snapshots of one
-   upload are not multiple placements. Do not mix partial-placement scores with completed ones.
+   upload are not multiple placements. Do not mix partial-placement scores with completed ones
+   unless the policy names the exception, such as a placement cut short by a league promotion.
 9. Apply the predeclared arena rule only after the required candidate and baseline evidence is
-   complete, except for an explicitly allowed early rollback. Compare per-upload mean placement
-   scores; report any policy-required opponent-adjusted performance and its model assumptions. A raw win rate
-   can change simply because the matchmaker served different opponents.
-10. Estimate placement noise from repeated uploads of an unchanged configuration/build, using
-    a declared calibration cohort/window and margin rule. Keep model uncertainty separate from
-    upload-to-upload variability; two placements give a fragile noise estimate. Missing required
-    baseline placements, rating inputs or uncertainty estimates mean pending evidence, not an automatic
-    pass. Label any predeclared provisional margin as provisional.
+   complete, except for an explicitly allowed early rollback. Compare placement scores within
+   one league only; after a league promotion, rebuild the selected version's baseline there.
+   Report any policy-required opponent-adjusted performance and its model assumptions. Raw win
+   rates and shared-opponent deltas move with the opponents the matchmaker served: in Back Track
+   King, identical bytes showed shared-opponent deltas of -14.2 and +8.5 pp. Keep them as context.
+10. Estimate placement noise from repeated uploads of an unchanged configuration/build in one
+    league, using a declared calibration cohort/window and margin rule; state any pooling across
+    leagues as an assumption. Keep model uncertainty separate from upload-to-upload variability;
+    two placements give a fragile noise estimate. Missing required baseline placements, rating
+    inputs or uncertainty estimates mean pending evidence, not an automatic pass. Label any
+    predeclared provisional margin as provisional.
 11. Follow the declared rollback/promotion logic exactly. A practical policy may promote when
     all gates pass and the candidate is not clearly worse; do not silently add a significance
     requirement for superiority or claim superiority from that decision. Keep the failure rule's
@@ -103,7 +108,7 @@ stage's pools/results, artifact hashes, upload ids, margin calibration, final ve
 action. Preserve rejected evidence. Amend policies prospectively; label retrospective reuse of
 old screens explicitly and preserve the original verdict alongside the re-evaluation.
 
-## 2. Preserve paired evidence and independent map coverage
+## 3. Preserve paired evidence and independent map coverage
 
 Play A as P0 and P1 on the SAME initialization, not merely alternating sides on different maps.
 Identify maps by a hash of their full initialization, not just replay filename; distinguish map
@@ -146,9 +151,10 @@ Live boss gates are noisy: in Back Track King an unchanged control ranged from 1
 of 40 across sessions. Use the policy's current continuation rule and paired uncertainty, not
 a universal game-count prescription. Its 2026-10-27 policy uses 40 games only as a live filter
 and moves final selection to repeated arena placements; 80/120-game confirmation is historical.
-Refresh cached controls after outcome-guided development on their maps.
+Refresh cached controls after outcome-guided development on their maps. A league promotion
+changes the live boss: revalidate the proxy and refresh boss controls in the new league.
 
-## 3. Check that local benches measure the arena
+## 4. Check that local benches measure the arena
 
 Before the strength loop, check whether self-play against your own frozen versions reproduces
 the arena/boss meta: game length, disruption/attack rate, share of turns with full resource use,
@@ -166,7 +172,7 @@ a replay action-agreement gap can come from different game phases or already-dec
 while a failed live transfer can come from selecting a noisy screen winner. Revalidate a changed
 proxy against behavior AND predictive candidate ordering; better action agreement alone is not enough.
 
-## 4. Separate fidelity, mechanism and population strength
+## 5. Separate fidelity, mechanism and population strength
 
 First validate the relevant replay corpus, especially when local results disagree with CG.
 Check player identity and terminal failures before attributing a divergence to engine rules.
@@ -214,7 +220,7 @@ Useful new candidates can still weaken play by displacing ordinary comparisons. 
 coverage at nominal and ample time; test optional search after completing the baseline
 comparisons, on the same clock, keeping the saved answer until a new comparison completes.
 
-## 5. Match timing without claiming identical execution
+## 6. Match timing without claiming identical execution
 
 Derive nominal local search budgets from the submission's clock accounting: total allowance
 minus input/preparation, safety margin and first-turn warm-up where applicable. Record numbers,

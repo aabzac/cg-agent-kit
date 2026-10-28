@@ -16,12 +16,15 @@ application/json`, body is a JSON array of positional arguments. Java `HttpClien
 
 | service | body | returns |
 |---|---|---|
-| `Leaderboards/getFilteredChallengeLeaderboard` | `["<challenge-public-id>", null, "global", {"active":false,"column":"","filter":""}]` | `users[]` with `pseudo`, `rank`, `score`, `agentId`, `league.divisionIndex`, `programmingLanguage`; `leagues` |
+| `Leaderboards/getFilteredChallengeLeaderboard` | `["<challenge-public-id>", null, "global", {"active":false,"column":"","filter":""}]` | `users[]` with `pseudo`, `rank`, `score`, `agentId`, `league.divisionIndex`, `programmingLanguage`, placement progress `percentage`/`inProgress`; `leagues` |
 | `gamesPlayersRanking/findLastBattlesByAgentId` | `[agentId, null]` | recent games: `gameId`, `done`, `players[{position, nickname, playerAgentId}]` |
 | `gameResult/findByGameId` | `[gameId, null]` | full replay: `frames[]`, `agents[]`, `refereeInput` (seed), `metadata`, `ranks`, `scores` |
 
 Challenge public id = the slug in the contest URL (e.g. `summer-challenge-2026-back-track-king`).
 Leagues: `divisionIndex` counts from Wood upwards; Legend appears only after it opens.
+After the contest the arena continues as a multiplayer puzzle: Back Track King then read its
+leaderboard with `Leaderboards/getFilteredPuzzleLeaderboard` and the same slug and body, and its
+Silver boss had a new agent ID. Re-resolve boss and agent IDs after that transition.
 
 ## Replay (`gameResult`) structure
 
@@ -76,14 +79,26 @@ entry separately. Do not mix boss games into arena-strength statistics by defaul
 
 Before an authorized upload, archive the live entry's battle list and available canonical
 replays. In Back Track King, replacing the live agent made its battle list empty; previously
-downloaded games remained the only available evidence. Verify the current game's API behavior,
-but do not rely on being able to discover an old upload's games after replacing it.
+downloaded games remained the only available evidence, and games played after the last fetch
+were lost at the next Submit. Verify the current game's API behavior, but do not rely on being
+able to discover an old upload's games after replacing it.
+
+Follow every new upload through placement, not only before the next Submit. In Back Track King
+a league promotion at the end of placement replaced the agent: CG replayed the placement in the
+new league as a new agent. The old agent's list was gone at the next fetch, and
+`findLastBattlesByTestSessionHandle` also listed only the live agent. The contest's tool polled
+every 15 minutes, every 3 minutes from 85% placement, until `percentage` was 100 with
+`inProgress` false, and filed the promoted agent as the next upload with `promotedFrom`.
+Treat an empty list for a known agent as a replaced agent, not as zero games. Lost results can
+be partly recovered from opponents' last-battles lists (85 of ~120 there, from 102 opponents):
+such rows have no replays or map data and over-represent late placement, so mark them recovered.
 
 Store each upload separately with its agent ID, artifact/build and configuration hashes,
 submission/fetch times, league, placement-completion state and rating snapshots. Preserve the
 first observed completed-placement snapshot as that upload's placement result; later ratings
 are separate observations. Partial-placement imports are historical context, not interchangeable
-completed placements. Do not replace missing results with a later score or an estimate.
+completed placements. Do not replace missing results with a later score or an estimate. CG
+scores do not compare across leagues; keep the league with every score and comparison.
 
 Re-uploading one artifact creates another upload of the same configuration, not a new strategy.
 Check configuration identity before grouping/relabeling uploads; keep distinct build hashes,
@@ -92,7 +107,8 @@ at fetch time is not necessarily the rating at match time. Resume downloads by g
 request budgets/backoff separate from the promotion decision. Use `cg-promote-bot` to interpret
 repeated placements; fetching evidence does not authorize an upload or rollback.
 
-Source: Back Track King `docs/arena-uploads.md`, adopted 2026-10-27 (repository commit `2fc4980`).
+Source: Back Track King `docs/arena-uploads.md`, adopted 2026-10-27, with placement watching
+and league rules added that evening (`master` at `56a6624`, 2026-10-28).
 
 ## IDE / boss replay capture
 

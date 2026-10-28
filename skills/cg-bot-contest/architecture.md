@@ -124,7 +124,8 @@ does not preserve it elsewhere, and untracking files does not remove them from G
 Archive closed journal periods without losing their text or links; leave an index and only
 current decisions in STATUS/PLAN. Preserve old verdicts and attach later corrections explicitly.
 
-Source lesson: Back Track King at `2fc4980`, `docs/repo-cleanup-v1.md` and `docs/prune-v1.md`.
+Source lesson: Back Track King (`master` at `56a6624`), `docs/repo-cleanup-v1.md` and
+`docs/prune-v1.md`.
 Its exact retention set, file-size limit and local commit policy are project choices.
 
 ## Visualizer

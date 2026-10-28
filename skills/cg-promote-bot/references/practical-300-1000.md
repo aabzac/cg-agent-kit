@@ -1,10 +1,16 @@
 # Alternative policy: practical-300-1000-v2
 
-Use this named alternative only when the project explicitly adopts it. It was already present
-in cg-agent-kit at e3d72f2 and remains available for existing projects. It is not Back Track King
-v4 (which pooled 300/+200/+500), nor the later v5 arena-upload policy. Preserve its id and
+Use this named alternative only when the project explicitly adopts it. Preserve its id and
 historical verdicts when changing policies. It is a practical selection rule, not a test with
 an overall 95% error guarantee; confidence intervals remain descriptive diagnostics.
+
+Origin: Back Track King adopted `practical-300-1000-v1` on 2026-09-16 and added the 52% floor
+(v2) the same day. Three days later that contest replaced the common-opponent stages with a
+40-game cached boss check (boss-cache-v3), then folded the direct stages into one pooled
+1000-game run (v4), and moved to proxy screens in v5 after its self-play gates stopped
+predicting boss results; v5 later added arena uploads. See
+[its current policy](back-track-king-policy.md). Do not mix this protocol's gates with those
+later revisions.
 
 1. Freeze candidate A, selected control B, and an older or behaviorally different opponent C.
    Predeclare fresh representative map pools, both sides per map, identical nominal time budgets,

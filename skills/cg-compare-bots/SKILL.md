@@ -63,4 +63,5 @@ project's adopted policy; `cg-promote-bot` describes staged screens, fresh repli
 regression guards and repeated arena placements, plus explicitly named alternative protocols.
 Keep a fresh replication pool independent of the screen that selected the candidate. Preserve
 each pool's matched results; pool them only under the declared rule. Arena matchmaking is not
-a paired-seed experiment, so keep those observations separate from local matched series.
+a paired-seed experiment, so keep those observations separate from local matched series, and
+compare arena scores only within one league.

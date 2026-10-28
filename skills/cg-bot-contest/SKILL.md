@@ -68,7 +68,8 @@ Build in this order; each item is small and unblocks the next.
 - v00 = trivial legal bot, v01 = greedy. Submit as early as possible: leaving Wood exposes the full
   statement. By default the user pastes the verified submission; identify the exact artifact.
 - After each promotion: capture statement, reconcile with inferred rules, add tests, re-run
-  `cgValidate`.
+  `cgValidate`. Arena scores restart in the new league: rebuild the selected version's arena
+  baseline there and revalidate boss-based controls and proxies before the next decision.
 
 ## Phase 3 — strength loop (rest of the contest)
 
