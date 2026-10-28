@@ -269,8 +269,13 @@ def skill_copies(generated: Iterable[str]) -> list[str]:
     return sorted(name for name in generated if name.split("/", 2)[1:2] == ["skills"])
 
 
-def ignore_rules(existing: bytes | None, paths: list[str]) -> bytes | None:
-    """Return .gitignore with only its marked kit block set to these paths; an empty list removes the block."""
+def ignore_patterns(agents: list[str]) -> list[str]:
+    # Folder contents rather than the folders: a later "!/.claude/skills/<name>/" line can still re-include one.
+    return sorted(f"/{AGENT_LAYOUTS[agent]}/skills/*" for agent in agents)
+
+
+def ignore_rules(existing: bytes | None, patterns: list[str]) -> bytes | None:
+    """Return .gitignore with only its marked kit block set to these patterns; an empty list removes the block."""
     data = existing or b""
     lines = data.split(b"\n")
     bare = [line.rstrip(b"\r") for line in lines]
@@ -280,17 +285,29 @@ def ignore_rules(existing: bytes | None, paths: list[str]) -> bytes | None:
         raise SyncError(".gitignore has a malformed cg-agent-kit block; keep one BEGIN line before one END line")
     newline = b"\r\n" if b"\r\n" in data else b"\n"
     block = b""
-    if paths:
-        # File patterns, not skill directories: files a user adds there stay visible to Git.
-        patterns = ["/" + re.sub(r"([\[\]*?!#])", r"\\\1", path) for path in paths]
+    if patterns:
         block = b"".join(line + newline for line in (
             IGNORE_BEGIN + b": generated skills, recreated by python .ai/sync.py sync .",
             *(pattern.encode("utf-8") for pattern in patterns), IGNORE_END))
     if begins:
         return b"\n".join(lines[:begins[0]]) + (b"\n" if begins[0] else b"") + block + b"\n".join(lines[ends[0] + 1:])
-    if not paths:
+    if not patterns:
         return existing
     return data + (newline if data and not data.endswith(b"\n") else b"") + block
+
+
+def hidden_entries(root: Path, agents: list[str], kit_skills: set[str], ignore: bytes) -> list[str]:
+    """Entries of ignored skill folders that the kit did not generate and no later !-line re-includes."""
+    after = ignore.split(b"\n" + IGNORE_END, 1)[-1]
+    included = {line.strip()[1:].strip(b"/") for line in after.split(b"\n") if line.strip().startswith(b"!")}
+    hidden = []
+    for agent in agents:
+        folder = root / AGENT_LAYOUTS[agent] / "skills"
+        for entry in sorted(folder.iterdir()) if folder.is_dir() else ():
+            relative = f"{AGENT_LAYOUTS[agent]}/skills/{entry.name}"
+            if entry.name not in kit_skills and relative.encode("utf-8") not in included:
+                hidden.append(relative)
+    return hidden
 
 
 def preflight(root: Path, generated: dict[str, bytes], previous: dict[str, str]) -> list[str]:
@@ -394,7 +411,8 @@ def synchronize(args: argparse.Namespace, action: str) -> int | None:
         print(f"Note: using the synchronizer committed in kit {commit[:12]}.", file=sys.stderr, flush=True)
         return delegate(script, args)
     project = project_path.read_bytes() if project_path.exists() else files["templates/project.md"]
-    generated = render(files, project, commit, config.get("agents", list(AGENT_LAYOUTS)))
+    agents = config.get("agents", list(AGENT_LAYOUTS))
+    generated = render(files, project, commit, agents)
     new_lock = {"schema_version": VERSION, "commit": commit,
                 "files": {name: digest(data) for name, data in sorted(generated.items())}}
     # Without commit_skills the skill copies stay out of Git: a fresh clone has none until sync recreates them.
@@ -402,7 +420,7 @@ def synchronize(args: argparse.Namespace, action: str) -> int | None:
     copies = set(skill_copies(generated))
     ignore_path = root / ".gitignore"
     old_ignore = ignore_path.read_bytes() if ignore_path.is_file() else None
-    new_ignore = ignore_rules(old_ignore, sorted(copies) if local_skills else [])
+    new_ignore = ignore_rules(old_ignore, ignore_patterns(agents) if local_skills else [])
     if new_ignore != old_ignore and action != "check":
         ignore_path = destination(root, ".gitignore")  # refuse links before anything is written
         if ignore_path.exists() and not ignore_path.is_file():
@@ -457,6 +475,11 @@ def synchronize(args: argparse.Namespace, action: str) -> int | None:
         write_atomic(destination(root, ".ai/kit.lock.json"), json_bytes(new_lock))
     print(f"{action.capitalize()}: {root.name} uses kit {commit[:12]} ({len(generated)} generated files"
           + ("; skills are ignored by Git)" if local_skills else ")"), flush=True)
+    if local_skills:
+        kit_skills = {name.split("/")[1] for name in files if name.startswith("skills/")}
+        for relative in hidden_entries(root, agents, kit_skills, new_ignore or b""):
+            print(f"Note: {relative} is not a kit skill, and the cg-agent-kit block in .gitignore hides it from Git. "
+                  f"Re-include it with a later line !/{relative}/ or set commit_skills to true.", file=sys.stderr)
     return None
 
 

@@ -424,19 +424,24 @@ class SyncIntegrationTests(unittest.TestCase):
 
     def test_new_contests_keep_generated_skills_out_of_git(self):
         self.put(self.kit, "skills/compare-bots/references/table[1].md", "| seed |\n")
-        self.commit("Add a reference whose name needs escaping")
+        self.commit("Add a reference with brackets in its name")
         self.target.mkdir()
         self.target_git("init", "--quiet")
         self.put(self.target, ".claude/skills/project-skill/SKILL.md", "Project skill\n")
-        self.cli("init")
+        result = self.cli("init")
         self.assertEqual((self.config()["agents"], self.config()["commit_skills"]), (["claude", "codex"], False))
-        visible = sorted(line[3:] for line in self.target_git("status", "--porcelain", "--untracked-files=all").splitlines())
+        self.assertIn(b"\n/.agents/skills/*\n/.claude/skills/*\n# END cg-agent-kit\n", (self.target / ".gitignore").read_bytes())
+        self.assertIn("Note: .claude/skills/project-skill is not a kit skill", result.stderr)
+        status = ("status", "--porcelain", "--untracked-files=all")
+        visible = sorted(line[3:] for line in self.target_git(*status).splitlines())
         self.assertEqual(visible, [".ai/kit.json", ".ai/kit.lock.json", ".ai/project.md", ".ai/sync.py",
-                                   ".claude/skills/project-skill/SKILL.md", ".gitignore", "AGENTS.md", "CLAUDE.md"])
+                                   ".gitignore", "AGENTS.md", "CLAUDE.md"])
         for agent in (".agents", ".claude"):
             self.assertTrue((self.target / agent / "skills/compare-bots/references/table[1].md").is_file())
-        self.put(self.target, ".claude/skills/compare-bots/notes.md", "User notes stay visible\n")
-        self.assertIn(".claude/skills/compare-bots/notes.md", self.target_git("status", "--porcelain", "--untracked-files=all"))
+        ignore = self.target / ".gitignore"
+        ignore.write_bytes(ignore.read_bytes() + b"!/.claude/skills/project-skill/\n")
+        self.assertIn(".claude/skills/project-skill/SKILL.md", self.target_git(*status))
+        self.assertNotIn("Note:", self.cli("sync").stderr)
         self.cli("check")
 
     def test_check_accepts_a_clone_without_ignored_skills(self):
@@ -459,7 +464,7 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertTrue((self.target / ".claude/skills/compare-bots/SKILL.md").is_file())
         self.assertFalse((self.target / ".agents").exists())
         ignore = (self.target / ".gitignore").read_text(encoding="utf-8")
-        self.assertIn("/.claude/skills/compare-bots/SKILL.md", ignore)
+        self.assertIn("/.claude/skills/*", ignore)
         self.assertNotIn(".agents", ignore)
         config = self.config()
         config["agents"] = ["codex"]
@@ -468,7 +473,9 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertFalse((self.target / "CLAUDE.md").exists())
         self.assertFalse((self.target / ".claude/skills/compare-bots/SKILL.md").exists())
         self.assertTrue((self.target / ".agents/skills/compare-bots/SKILL.md").is_file())
-        self.assertIn("/.agents/skills/compare-bots/SKILL.md", (self.target / ".gitignore").read_text(encoding="utf-8"))
+        ignore = (self.target / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("/.agents/skills/*", ignore)
+        self.assertNotIn(".claude", ignore)
         self.cli("check")
         for agents in ([], ["cursor"], ["claude", "claude"], "claude", [1]):
             with self.subTest(agents=agents):
@@ -486,11 +493,12 @@ class SyncIntegrationTests(unittest.TestCase):
         self.cli("init")
         ignore = (self.target / ".gitignore").read_bytes()
         self.assertTrue(ignore.startswith(b"build/\r\n*.log\r\n# BEGIN cg-agent-kit"))
+        self.assertTrue(ignore.endswith(b"\r\n/.agents/skills/*\r\n/.claude/skills/*\r\n# END cg-agent-kit\r\n"))
         self.assertNotIn(b"\n", ignore.replace(b"\r\n", b""))
         self.put(self.kit, "skills/profile-bot/SKILL.md", "---\nname: profile-bot\ndescription: Profile a bot.\n---\n")
         self.commit("Add shared skill")
         self.cli("update")
-        self.assertIn(b"/.agents/skills/profile-bot/SKILL.md\r\n", (self.target / ".gitignore").read_bytes())
+        self.assertEqual((self.target / ".gitignore").read_bytes(), ignore)  # new kit skills need no new rules
         self.put(self.target, ".gitignore", (self.target / ".gitignore").read_bytes() + b"replays/\r\n")
         self.cli("check")
         config = self.config()
