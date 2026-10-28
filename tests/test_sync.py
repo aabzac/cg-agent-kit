@@ -265,6 +265,30 @@ class SyncIntegrationTests(unittest.TestCase):
         result = self.cli("run", "--", "fake-agent", "hello", expected=3, env=env)
         self.assertIn("AGENT hello", result.stdout)
 
+    @unittest.skipUnless(os.name == "nt", "cmd.exe quoting is specific to Windows")
+    def test_run_passes_metacharacters_to_command_shims_literally(self):
+        self.cli("init")
+        shims = self.root / "bin"
+        # Forwards %* the way npm shims such as codex.cmd do; Python then reports what arrived.
+        self.put(shims, "forward.cmd", f'@"{sys.executable}" -c "import json, sys; print(json.dumps(sys.argv[1:]))" %*\r\n')
+        env = dict(os.environ, PATH=f"{shims}{os.pathsep}{os.environ.get('PATH', '')}")
+        arguments = ["report&ver", "a|b", "x>y", "(group)", "a^b", "100%", "%PATH%", "!PATH!",
+                     'say "hi"', 'a"&ver', "C:\\dir\\", "two words", ""]
+        result = self.cli("run", "--", "forward", *arguments, env=env)
+        self.assertEqual(json.loads(result.stdout.splitlines()[-1]), arguments)
+        self.assertIn("line breaks", self.cli("run", "--", "forward", "two\nlines", expected=1, env=env).stderr)
+
+    def test_run_launches_with_the_new_synchronizer(self):
+        self.cli("init")
+        script = self.kit / "scripts/sync.py"
+        script.write_bytes(script.read_bytes().replace(
+            b"def launch(command: list[str], cwd: Path) -> int:\n",
+            b"def launch(command: list[str], cwd: Path) -> int:\n    print('new launch', flush=True)\n"))
+        self.assertIn(b"new launch", script.read_bytes())
+        self.commit("Change the launcher")
+        result = self.cli("run", "--", sys.executable, "-c", "print('agent')", script=self.target / ".ai/sync.py")
+        self.assertEqual(result.stdout.splitlines()[-2:], ["new launch", "agent"])
+
     def test_update_renders_with_the_synchronizer_from_the_new_commit(self):
         self.cli("init")
         script = self.kit / "scripts/sync.py"
@@ -299,6 +323,36 @@ class SyncIntegrationTests(unittest.TestCase):
         self.cli("check")
         self.cli("sync")
         self.assertEqual(self.files(), before)
+
+    def test_crlf_resources_are_copied_byte_for_byte_and_restored(self):
+        # Like a kit file marked -text whose CRLF bytes matter, such as a PDF with xref offsets.
+        pdf = b"%PDF-1.4\r\n1 0 obj << /Type /Catalog >> endobj\r\ntrailer << /Root 1 0 R >>\r\n%%EOF\r\n"
+        self.put(self.kit, "skills/compare-bots/assets/rules.pdf", pdf)
+        self.commit("Add CRLF resource")
+        self.cli("init")
+        copies = [self.target / agent / "skills/compare-bots/assets/rules.pdf" for agent in (".agents", ".claude")]
+        self.assertEqual([path.read_bytes() for path in copies], [pdf, pdf])
+        for path in copies:  # what cc0d996 or a normalizing Git configuration leaves behind
+            path.write_bytes(pdf.replace(b"\r\n", b"\n"))
+        self.assertIn("line endings differ", self.cli("check", expected=1).stderr)
+        self.cli("sync")
+        self.assertEqual([path.read_bytes() for path in copies], [pdf, pdf])
+        self.cli("check")
+
+    def test_locks_from_earlier_checksum_rules_are_accepted(self):
+        source = self.put(self.kit, "skills/compare-bots/assets/example.cpp", b"int main() {\r\n    return 0;\r\n}\r\n")
+        self.commit("Add CRLF C++ example")
+        self.cli("init")
+        lock = self.lock()
+        for agent in (".agents", ".claude"):  # 7332a72 hashed unlisted suffixes without normalizing CRLF
+            lock["files"][f"{agent}/skills/compare-bots/assets/example.cpp"] = hashlib.sha256(source.read_bytes()).hexdigest()
+        self.put(self.target, ".ai/kit.lock.json", json.dumps(lock))
+        self.cli("check")
+        source.write_bytes(b"int main() {\r\n    return 1;\r\n}\r\n")
+        self.commit("Change the C++ example")
+        self.cli("update")
+        self.assertIn(b"return 1;", (self.target / ".claude/skills/compare-bots/assets/example.cpp").read_bytes())
+        self.cli("check")
 
     def test_validate_reports_layouts_that_sync_rejects(self):
         validate = self.put(self.kit, "scripts/validate.py", VALIDATE.read_bytes())

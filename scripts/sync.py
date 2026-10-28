@@ -99,6 +99,16 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(canonical(data)).hexdigest()
 
 
+def checksums(data: bytes) -> set[str]:
+    """Lock entries that describe this file: exact bytes, or CRLF-normalized as earlier versions recorded them."""
+    return {hashlib.sha256(data).hexdigest(), hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()}
+
+
+def same_checkout(actual: bytes, content: bytes) -> bool:
+    """Whether a file is the generated content as Git may check it out: core.autocrlf only adds CRs to LF text."""
+    return actual == content or (b"\r" not in content and is_text(content) and actual == content.replace(b"\n", b"\r\n"))
+
+
 def json_bytes(value: dict) -> bytes:
     return (json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
 
@@ -214,7 +224,8 @@ def kit_files(directory: Path, commit: str) -> dict[str, bytes]:
             raise SyncError(f"Kit source must contain regular files, not links: {name}")
         blobs[name] = oid
     check_kit_paths(blobs)
-    return {name: canonical(git(directory, "cat-file", "blob", oid)) for name, oid in blobs.items()}
+    # Copies stay byte-for-byte: only Git knows whether a resource's line endings matter (-text).
+    return {name: git(directory, "cat-file", "blob", oid) for name, oid in blobs.items()}
 
 
 def kit_script(directory: Path, commit: str) -> bytes:
@@ -222,12 +233,12 @@ def kit_script(directory: Path, commit: str) -> bytes:
     metadata = git(directory, "ls-tree", "-z", commit, "--", "scripts/sync.py").split(b"\t", 1)[0].split()
     if len(metadata) != 3 or metadata[0] not in (b"100644", b"100755") or metadata[1] != b"blob":
         raise SyncError("Kit commit is missing scripts/sync.py")
-    return canonical(git(directory, "cat-file", "blob", metadata[2].decode("ascii")))
+    return git(directory, "cat-file", "blob", metadata[2].decode("ascii"))
 
 
 def render(files: dict[str, bytes], project: bytes, commit: str) -> dict[str, bytes]:
     try:
-        common = files["rules/common.md"].decode("utf-8-sig").strip()
+        common = files["rules/common.md"].decode("utf-8-sig").replace("\r\n", "\n").strip()
         local = project.decode("utf-8-sig").replace("\r\n", "\n").strip()
     except UnicodeError as exc:
         raise SyncError("Rules and project.md must be UTF-8 text") from exc
@@ -251,12 +262,19 @@ def preflight(root: Path, generated: dict[str, bytes], previous: dict[str, str])
             if not path.is_file():
                 conflicts.append(relative + " (not a file)")
                 continue
-            actual = digest(path.read_bytes())
+            actual = checksums(path.read_bytes())
             if relative not in previous:
                 conflicts.append(relative + " (unmanaged file already exists)")
-            elif actual != previous[relative] and (relative not in generated or actual != digest(generated[relative])):
+            elif previous[relative] not in actual and (relative not in generated or digest(generated[relative]) not in actual):
                 conflicts.append(relative + " (local edits)")
     return conflicts
+
+
+def describes(lock: dict, commit: str, generated: dict[str, bytes]) -> bool:
+    """Whether a lock records this commit and content, accepting checksums written by earlier versions."""
+    files = lock["files"]
+    return (lock["commit"] == commit and files.keys() == generated.keys()
+            and all(files[name] in checksums(data) for name, data in generated.items()))
 
 
 def write_atomic(path: Path, content: bytes) -> None:
@@ -271,18 +289,21 @@ def write_atomic(path: Path, content: bytes) -> None:
             os.unlink(temporary)
 
 
-def delegate(script: bytes, args: argparse.Namespace, action: str) -> int:
-    """Hand the operation to the synchronizer committed with the kit version being applied."""
-    command = [action, args.target, *(["--source", args.source] if args.source else [])]
-    if action == "init":
+def delegate(script: bytes, args: argparse.Namespace) -> int:
+    """Hand the whole command, a run's launch included, to the synchronizer of the kit commit being applied."""
+    command = [args.action, args.target, *(["--source", args.source] if args.source else [])]
+    if args.action == "init":
         command += ["--ref", args.ref, *(["--repo", args.repo] if args.repo else []), *(["--pinned"] if args.pinned else [])]
+    if args.action == "run":
+        command += ["--", *args.command]
     with tempfile.TemporaryDirectory(prefix="cg-kit-") as scratch:
         path = Path(scratch) / "sync.py"
         path.write_bytes(script)
         return subprocess.call([sys.executable, str(path), *command])
 
 
-def synchronize(args: argparse.Namespace, action: str) -> int:
+def synchronize(args: argparse.Namespace, action: str) -> int | None:
+    """Return the exit status of the synchronizer that took over, or None once this copy did the work."""
     root = Path(args.target).absolute()
     assert_plain_path(root)
     if root.exists() and not root.is_dir():
@@ -324,11 +345,12 @@ def synchronize(args: argparse.Namespace, action: str) -> int:
         raise SyncError(f"Missing project rules: {project_path}")
     with snapshot(config["repository"], ref, args.source) as (directory, commit):
         script = kit_script(directory, commit)
-        files = kit_files(directory, commit) if script == canonical(Path(__file__).read_bytes()) else None
+        same_script = canonical(script) == canonical(Path(__file__).read_bytes())
+        files = kit_files(directory, commit) if same_script else None
     if files is None:
-        # Each kit commit renders with its own synchronizer; an older or edited copy only hands over.
+        # Each kit commit renders and launches with its own synchronizer; other copies only hand over.
         print(f"Note: using the synchronizer committed in kit {commit[:12]}.", file=sys.stderr, flush=True)
-        return delegate(script, args, action)
+        return delegate(script, args)
     project = project_path.read_bytes() if project_path.exists() else files["templates/project.md"]
     generated = render(files, project, commit)
     new_lock = {"schema_version": VERSION, "commit": commit,
@@ -337,18 +359,20 @@ def synchronize(args: argparse.Namespace, action: str) -> int:
         changes = []
         for relative, content in generated.items():
             path = destination(root, relative)
-            if not path.is_file() or digest(path.read_bytes()) != digest(content):
-                changes.append(relative)
+            actual = path.read_bytes() if path.is_file() else None
+            if actual is None or not same_checkout(actual, content):
+                note = " (line endings differ)" if actual is not None and digest(actual) == digest(content) else ""
+                changes.append(relative + note)
         for relative in previous.keys() - generated.keys():
             if destination(root, relative).exists():
                 changes.append(relative + " (stale)")
-        if old_lock != new_lock:
+        if not describes(old_lock, commit, generated):
             changes.append(".ai/kit.lock.json")
         if changes:
             raise SyncError("Generated files differ from the locked kit/project rules:\n  " + "\n  ".join(changes) +
                             "\nRun sync after editing .ai/project.md; edit shared sources in the kit.")
         print(f"OK: {root.name} matches kit {commit[:12]}")
-        return 0
+        return None
     conflicts = preflight(root, generated, previous)
     if conflicts:
         raise SyncError("No files changed. Resolve generated-file conflicts first:\n  " + "\n  ".join(conflicts) +
@@ -360,7 +384,7 @@ def synchronize(args: argparse.Namespace, action: str) -> int:
             raise SyncError(f"Expected regular file: {path}")
     for relative, content in generated.items():
         path = destination(root, relative)
-        if not path.exists() or digest(path.read_bytes()) != digest(content):  # keep equivalent checkouts
+        if not path.exists() or not same_checkout(path.read_bytes(), content):  # keep autocrlf checkouts
             write_atomic(path, content)
     for relative in previous.keys() - generated.keys():
         path = destination(root, relative)
@@ -373,7 +397,7 @@ def synchronize(args: argparse.Namespace, action: str) -> int:
     if new_lock != old_lock:  # an unchanged lock keeps its checkout line endings, so Git sees no edit
         write_atomic(destination(root, ".ai/kit.lock.json"), json_bytes(new_lock))
     print(f"{action.capitalize()}: {root.name} uses kit {commit[:12]} ({len(generated)} generated files)", flush=True)
-    return 0
+    return None
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -402,19 +426,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def batch_argument(value: str, force: bool = False) -> str:
+    """Quote one argument for cmd.exe running a .cmd/.bat file, so that it arrives literally (BatBadBut)."""
+    if any(c in value for c in "\0\r\n"):
+        raise SyncError(f"Batch files cannot receive line breaks or NUL: {value!r}")
+    if not force and re.fullmatch(r"[\w#$*+\-./:?@\\]*[\w#$*+\-./:?@]", value, re.ASCII):
+        return value  # nothing that cmd.exe interprets, and no backslash before a closing quote
+    # Quotes keep &|<>^() literal for cmd.exe; "" and doubled backslashes also suit the C runtime.
+    # %cd:~,% expands to nothing, so cmd.exe's single expansion pass leaves %NAME% as typed.
+    value = re.sub(r'(\\*)"', r'\1\1""', value)
+    return '"' + re.sub(r"(\\+)\Z", r"\1\1", value).replace("%", "%%cd:~,%") + '"'
+
+
 def launch(command: list[str], cwd: Path) -> int:
+    if os.name != "nt":
+        return subprocess.call(command, cwd=cwd)
     # CreateProcess ignores PATHEXT, so npm shims such as codex.cmd need an explicit lookup.
-    executable = shutil.which(command[0]) if os.name == "nt" else None
-    return subprocess.call([executable or command[0], *command[1:]], cwd=cwd)
+    executable = shutil.which(command[0]) or command[0]
+    if not executable.lower().endswith((".bat", ".cmd")):
+        return subprocess.call([executable, *command[1:]], cwd=cwd)
+    line = " ".join([batch_argument(executable, force=True), *map(batch_argument, command[1:])])
+    shell = os.environ.get("COMSPEC") or os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"), "System32", "cmd.exe")
+    return subprocess.call(f'cmd.exe /d /e:on /v:off /s /c "{line}"', executable=shell, cwd=cwd)
 
 
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
         status = synchronize(args, args.action)
-        if status or args.action != "run":
+        if status is not None:  # the kit commit's own synchronizer already ran everything, launch included
             return status
-        return launch(args.command, Path(args.target).absolute())
+        return launch(args.command, Path(args.target).absolute()) if args.action == "run" else 0
     except (SyncError, OSError, UnicodeError, ValueError) as exc:
         print(f"cg-agent-kit: {exc}", file=sys.stderr)
         return 1
