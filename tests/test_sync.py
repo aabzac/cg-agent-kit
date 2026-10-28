@@ -91,6 +91,14 @@ class SyncIntegrationTests(unittest.TestCase):
     def lock(self):
         return json.loads((self.target / ".ai/kit.lock.json").read_text(encoding="utf-8"))
 
+    def config(self):
+        return json.loads((self.target / ".ai/kit.json").read_text(encoding="utf-8"))
+
+    def target_git(self, *arguments):
+        result = subprocess.run(["git", "-C", str(self.target), *arguments], capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
+        return result.stdout.decode()
+
     def files(self):
         if not self.target.exists():
             return {}
@@ -413,6 +421,122 @@ class SyncIntegrationTests(unittest.TestCase):
         self.cli("init", expected=1)
         self.assertEqual(list(outside.iterdir()), [])
         self.assertFalse((self.target / "AGENTS.md").exists())
+
+    def test_new_contests_keep_generated_skills_out_of_git(self):
+        self.put(self.kit, "skills/compare-bots/references/table[1].md", "| seed |\n")
+        self.commit("Add a reference whose name needs escaping")
+        self.target.mkdir()
+        self.target_git("init", "--quiet")
+        self.put(self.target, ".claude/skills/project-skill/SKILL.md", "Project skill\n")
+        self.cli("init")
+        self.assertEqual((self.config()["agents"], self.config()["commit_skills"]), (["claude", "codex"], False))
+        visible = sorted(line[3:] for line in self.target_git("status", "--porcelain", "--untracked-files=all").splitlines())
+        self.assertEqual(visible, [".ai/kit.json", ".ai/kit.lock.json", ".ai/project.md", ".ai/sync.py",
+                                   ".claude/skills/project-skill/SKILL.md", ".gitignore", "AGENTS.md", "CLAUDE.md"])
+        for agent in (".agents", ".claude"):
+            self.assertTrue((self.target / agent / "skills/compare-bots/references/table[1].md").is_file())
+        self.put(self.target, ".claude/skills/compare-bots/notes.md", "User notes stay visible\n")
+        self.assertIn(".claude/skills/compare-bots/notes.md", self.target_git("status", "--porcelain", "--untracked-files=all"))
+        self.cli("check")
+
+    def test_check_accepts_a_clone_without_ignored_skills(self):
+        self.cli("init")
+        for agent in (".agents", ".claude"):
+            shutil.rmtree(self.target / agent)
+        self.assertIn("skills not generated yet", self.cli("check").stdout)
+        self.cli("sync")
+        self.assertTrue((self.target / ".claude/skills/compare-bots/SKILL.md").is_file())
+        (self.target / ".agents/skills/compare-bots/references/seeds.txt").unlink()
+        self.assertIn(".agents/skills/compare-bots/references/seeds.txt", self.cli("check", expected=1).stderr)
+        self.cli("sync")
+        self.cli("check")
+        self.put(self.target, ".claude/skills/compare-bots/SKILL.md", "Local changes\n")
+        self.cli("check", expected=1)
+        self.assertIn("local edits", self.cli("sync", expected=1).stderr)
+
+    def test_agents_select_the_generated_layouts(self):
+        self.cli("init", "--agents", "claude")
+        self.assertTrue((self.target / ".claude/skills/compare-bots/SKILL.md").is_file())
+        self.assertFalse((self.target / ".agents").exists())
+        ignore = (self.target / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("/.claude/skills/compare-bots/SKILL.md", ignore)
+        self.assertNotIn(".agents", ignore)
+        config = self.config()
+        config["agents"] = ["codex"]
+        self.put(self.target, ".ai/kit.json", json.dumps(config))
+        self.cli("sync")
+        self.assertFalse((self.target / "CLAUDE.md").exists())
+        self.assertFalse((self.target / ".claude/skills/compare-bots/SKILL.md").exists())
+        self.assertTrue((self.target / ".agents/skills/compare-bots/SKILL.md").is_file())
+        self.assertIn("/.agents/skills/compare-bots/SKILL.md", (self.target / ".gitignore").read_text(encoding="utf-8"))
+        self.cli("check")
+        for agents in ([], ["cursor"], ["claude", "claude"], "claude", [1]):
+            with self.subTest(agents=agents):
+                config["agents"] = agents
+                self.put(self.target, ".ai/kit.json", json.dumps(config))
+                before = self.files()
+                self.assertIn("agents", self.cli("sync", expected=1).stderr)
+                self.assertEqual(self.files(), before)
+        other = self.root / "other"
+        self.assertIn("agents", self.cli("init", "--agents", "claude,cursor", expected=1, target=other).stderr)
+        self.assertFalse(other.exists())
+
+    def test_gitignore_block_preserves_user_lines_and_can_be_removed(self):
+        self.put(self.target, ".gitignore", b"build/\r\n*.log")  # the user's own CRLF lines, no final newline
+        self.cli("init")
+        ignore = (self.target / ".gitignore").read_bytes()
+        self.assertTrue(ignore.startswith(b"build/\r\n*.log\r\n# BEGIN cg-agent-kit"))
+        self.assertNotIn(b"\n", ignore.replace(b"\r\n", b""))
+        self.put(self.kit, "skills/profile-bot/SKILL.md", "---\nname: profile-bot\ndescription: Profile a bot.\n---\n")
+        self.commit("Add shared skill")
+        self.cli("update")
+        self.assertIn(b"/.agents/skills/profile-bot/SKILL.md\r\n", (self.target / ".gitignore").read_bytes())
+        self.put(self.target, ".gitignore", (self.target / ".gitignore").read_bytes() + b"replays/\r\n")
+        self.cli("check")
+        config = self.config()
+        config["commit_skills"] = True
+        self.put(self.target, ".ai/kit.json", json.dumps(config))
+        self.assertIn(".gitignore (cg-agent-kit block)", self.cli("check", expected=1).stderr)
+        self.cli("sync")
+        self.assertEqual((self.target / ".gitignore").read_bytes(), b"build/\r\n*.log\r\nreplays/\r\n")
+        self.cli("check")
+        committed = self.root / "committed"
+        self.cli("init", "--commit-skills", target=committed)
+        self.assertFalse((committed / ".gitignore").exists())
+        self.assertTrue(json.loads((committed / ".ai/kit.json").read_text(encoding="utf-8"))["commit_skills"])
+
+    def test_configs_without_the_new_keys_keep_the_committed_layout(self):
+        self.cli("init", "--commit-skills")
+        config = self.config()
+        del config["agents"], config["commit_skills"]
+        self.put(self.target, ".ai/kit.json", json.dumps(config))
+        before = self.files()
+        self.cli("sync")
+        self.cli("check")
+        self.assertEqual(self.files(), before)
+        self.assertFalse((self.target / ".gitignore").exists())
+        for agent in (".agents", ".claude"):
+            self.assertTrue((self.target / agent / "skills/compare-bots/SKILL.md").is_file())
+
+    def test_malformed_gitignore_block_stops_before_writes(self):
+        for content in ("# BEGIN cg-agent-kit: partial\n/.claude/skills/x/SKILL.md\n",
+                        "# END cg-agent-kit\n# BEGIN cg-agent-kit\n"):
+            with self.subTest(content=content):
+                self.put(self.target, ".gitignore", content)
+                before = self.files()
+                self.assertIn("malformed cg-agent-kit block", self.cli("init", expected=1).stderr)
+                self.assertEqual(self.files(), before)
+
+    def test_init_options_reach_the_committed_synchronizer(self):
+        script = self.kit / "scripts/sync.py"
+        script.write_bytes(script.read_bytes().replace(b"<!-- Generated by cg-agent-kit.",
+                                                       b"<!-- Generated by cg-agent-kit (next)."))
+        self.commit("Change the generated header")
+        result = self.cli("init", "--agents", "claude", "--commit-skills")  # SCRIPT now differs from the commit
+        self.assertIn("using the synchronizer committed", result.stderr)
+        self.assertEqual((self.config()["agents"], self.config()["commit_skills"]), (["claude"], True))
+        self.assertFalse((self.target / ".agents").exists())
+        self.assertFalse((self.target / ".gitignore").exists())
 
 
 @unittest.skipUnless(shutil.which("git"), "Git is required")

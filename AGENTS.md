@@ -9,9 +9,10 @@ This repository is the shared source of CodinGame agent instructions. It is not 
 - Keep `check` read-only and pinned to `.ai/kit.lock.json`; only `update` advances the version. `run` applies the configured tracking/pinned policy before invoking a command.
 - The target commit's `scripts/sync.py` performs every operation, including `run`'s launch; other copies only hand over through the command line. Keep `init`, `sync`, `update`, `check`, `run` and their options backward compatible.
 - Write kit files byte-for-byte; tolerate line-ending changes only when comparing. Keep accepting lock checksums written by earlier versions.
+- New contests keep generated skill copies out of Git (`commit_skills: false` in `.ai/kit.json`): change only the marked cg-agent-kit block of a contest's `.gitignore`, and let `check` accept a clone where no copies exist yet. `agents` selects the `.claude`/`.agents` layouts. A `kit.json` without these keys keeps the committed two-layout behavior.
 - Read sources from Git commits, not uncommitted working-tree contents. Preserve offline `--source` operation.
 - Validate changes with `python scripts/validate.py` and `python -m unittest discover -s tests -v`.
 - Document behavior changes and executable commands in `README.md`. User-facing documentation is in Russian; agent procedures may be in English.
 - Do not install these project skills into a user's personal skill catalog unless explicitly requested. Commit and push source changes to this repository when the task includes saving them.
 
-Consumer projects edit `.ai/project.md` for their own rules, then regenerate `AGENTS.md`. Their `.agents/skills/` and `.claude/skills/` copies are generated; shared changes belong here.
+Consumer projects edit `.ai/project.md` for their own rules, then regenerate `AGENTS.md`. Their `.agents/skills/` and `.claude/skills/` copies are generated (and, by default, not committed); shared changes belong here.
