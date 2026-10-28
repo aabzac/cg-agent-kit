@@ -18,7 +18,8 @@ description: Validate a CodinGame simulator against official mechanics and an au
 4. Build a reproducible adapter that feeds the same initial state and action sequence
    to both implementations. Record game seeds and random outcomes where accessible.
    If exact RNG synchronization is impossible, test controlled deterministic transitions
-   separately and describe what stochastic behavior remains unverified.
+   separately and describe what stochastic behavior remains unverified. For CodinGame
+   replays, `cg-fetch-replays` covers the frame format, seat mapping and terminal-event caveats.
 
 ## Exercise the mechanics
 

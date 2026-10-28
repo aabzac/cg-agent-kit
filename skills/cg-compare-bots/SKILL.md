@@ -58,4 +58,6 @@ Write a compact entry at the project-defined experiment location with:
 - Decision, observed regressions, and limitations of the local evidence.
 
 Report unavailable harness capabilities or missing measurements explicitly. Do not
-claim a platform ranking gain from a local comparison alone.
+claim a platform ranking gain from a local comparison alone. For a promotion decision, apply the
+project's policy; `cg-promote-bot` describes the preferred practical 300/1000 protocol and the
+common-opponent and boss gates.
