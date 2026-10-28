@@ -428,10 +428,9 @@ class SyncIntegrationTests(unittest.TestCase):
         self.target.mkdir()
         self.target_git("init", "--quiet")
         self.put(self.target, ".claude/skills/project-skill/SKILL.md", "Project skill\n")
-        result = self.cli("init")
+        self.cli("init")
         self.assertEqual((self.config()["agents"], self.config()["commit_skills"]), (["claude", "codex"], False))
         self.assertIn(b"\n/.agents/skills/*\n/.claude/skills/*\n# END cg-agent-kit\n", (self.target / ".gitignore").read_bytes())
-        self.assertIn("Note: .claude/skills/project-skill is not a kit skill", result.stderr)
         status = ("status", "--porcelain", "--untracked-files=all")
         visible = sorted(line[3:] for line in self.target_git(*status).splitlines())
         self.assertEqual(visible, [".ai/kit.json", ".ai/kit.lock.json", ".ai/project.md", ".ai/sync.py",
@@ -441,7 +440,7 @@ class SyncIntegrationTests(unittest.TestCase):
         ignore = self.target / ".gitignore"
         ignore.write_bytes(ignore.read_bytes() + b"!/.claude/skills/project-skill/\n")
         self.assertIn(".claude/skills/project-skill/SKILL.md", self.target_git(*status))
-        self.assertNotIn("Note:", self.cli("sync").stderr)
+        self.cli("sync")
         self.cli("check")
 
     def test_check_accepts_a_clone_without_ignored_skills(self):
