@@ -6,18 +6,22 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import re
+import shutil
 import stat
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterable
 from contextlib import contextmanager
 
 
 VERSION = 1
-TEXT_SUFFIXES = {".md", ".py", ".yaml", ".yml", ".json", ".txt", ".sh", ".ps1",
-                 ".toml", ".ini", ".cfg", ".csv", ".tsv", ".html", ".css", ".js", ".ts"}
+KIT_SOURCES = ("rules/common.md", "skills", "scripts/sync.py", "templates/project.md")
+REQUIRED_SOURCES = ("rules/common.md", "scripts/sync.py", "templates/project.md")
+# Control bytes that Git counts as nonprintable when deciding whether core.autocrlf may convert a file.
+NONPRINTABLE = bytes(sorted(set(range(32)) - set(b"\b\t\n\x0c\r\x1b"))) + b"\x7f"
 SKILL_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 COMMIT = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -78,12 +82,21 @@ def destination(root: Path, relative: str) -> Path:
     return path
 
 
-def canonical(relative: str, data: bytes) -> bytes:
-    return data.replace(b"\r\n", b"\n") if PurePosixPath(relative).suffix.lower() in TEXT_SUFFIXES else data
+def is_text(data: bytes) -> bool:
+    """Mirror Git's end-of-line text detection, which decides what core.autocrlf rewrites on checkout."""
+    if b"\0" in data or data.count(b"\r") != data.count(b"\r\n"):
+        return False
+    special = len(data) - len(data.translate(None, NONPRINTABLE))
+    printable = len(data) - special - data.count(b"\n") - data.count(b"\r")
+    return printable >> 7 >= special - data.endswith(b"\x1a")
 
 
-def digest(relative: str, data: bytes) -> str:
-    return hashlib.sha256(canonical(relative, data)).hexdigest()
+def canonical(data: bytes) -> bytes:
+    return data.replace(b"\r\n", b"\n") if is_text(data) else data
+
+
+def digest(data: bytes) -> str:
+    return hashlib.sha256(canonical(data)).hexdigest()
 
 
 def json_bytes(value: dict) -> bytes:
@@ -152,7 +165,7 @@ def snapshot(repository: str, ref: str, source: str | None):
             if Path(top).resolve() != directory.resolve():
                 raise SyncError(f"Local source must be the kit repository root: {top}")
         commit = git(directory, "rev-parse", "--verify", "--end-of-options", ref + "^{commit}").decode().strip()
-        dirty = b"" if bare else git(directory, "status", "--porcelain", "--", "rules", "skills", "scripts/sync.py", "templates/project.md")
+        dirty = b"" if bare else git(directory, "status", "--porcelain", "--", *KIT_SOURCES)
         if dirty:
             print("Note: uncommitted kit edits are ignored; using the committed snapshot.", file=sys.stderr)
         yield directory, commit
@@ -165,39 +178,51 @@ def snapshot(repository: str, ref: str, source: str | None):
             yield directory, commit
 
 
-def kit_files(directory: Path, commit: str) -> dict[str, bytes]:
-    result = {}
-    entries = git(directory, "ls-tree", "-rz", commit, "--", "rules/common.md", "skills", "scripts/sync.py", "templates/project.md")
+def check_kit_paths(names: Iterable[str]) -> None:
+    """Apply the source layout rules shared with validate.py before any source is read."""
+    names = set(names)
     seen = {}
-    for entry in entries.split(b"\0"):
-        if not entry:
-            continue
-        metadata, raw_name = entry.split(b"\t", 1)
-        mode, kind, oid = metadata.decode("ascii").split()
-        name = safe_relative(raw_name.decode("utf-8"))
-        parts = name.split("/")
+    skill_names = set()
+    for name in sorted(names):
+        parts = safe_relative(name).split("/")
         for length in range(1, len(parts) + 1):
             prefix = "/".join(parts[:length])
             previous = seen.setdefault(prefix.casefold(), prefix)
             if previous != prefix:
                 raise SyncError(f"Case-insensitive source path collision: {previous} and {prefix}")
-        if kind != "blob" or mode not in {"100644", "100755"}:
-            raise SyncError(f"Kit source must contain regular files, not links: {name}")
-        result[name] = canonical(name, git(directory, "cat-file", "blob", oid))
-    for required in ("rules/common.md", "scripts/sync.py", "templates/project.md"):
-        if required not in result:
-            raise SyncError(f"Kit commit is missing {required}")
-    skill_names = set()
-    for name in result:
-        if name.startswith("skills/"):
-            parts = name.split("/")
+        if parts[0] == "skills":
             if len(parts) < 3 or len(parts[1]) > 64 or not SKILL_NAME.fullmatch(parts[1]):
                 raise SyncError(f"Invalid skill layout: {name}")
             skill_names.add(parts[1])
-    for name in skill_names:
-        if f"skills/{name}/SKILL.md" not in result:
+    for required in REQUIRED_SOURCES:
+        if required not in names:
+            raise SyncError(f"Kit sources are missing {required}")
+    for name in sorted(skill_names):
+        if f"skills/{name}/SKILL.md" not in names:
             raise SyncError(f"Missing SKILL.md for {name}")
-    return result
+
+
+def kit_files(directory: Path, commit: str) -> dict[str, bytes]:
+    blobs = {}
+    for entry in git(directory, "ls-tree", "-rz", commit, "--", *KIT_SOURCES).split(b"\0"):
+        if not entry:
+            continue
+        metadata, raw_name = entry.split(b"\t", 1)
+        mode, kind, oid = metadata.decode("ascii").split()
+        name = raw_name.decode("utf-8")
+        if kind != "blob" or mode not in {"100644", "100755"}:
+            raise SyncError(f"Kit source must contain regular files, not links: {name}")
+        blobs[name] = oid
+    check_kit_paths(blobs)
+    return {name: canonical(git(directory, "cat-file", "blob", oid)) for name, oid in blobs.items()}
+
+
+def kit_script(directory: Path, commit: str) -> bytes:
+    """Read the commit's synchronizer before this copy applies its own, possibly older, rules."""
+    metadata = git(directory, "ls-tree", "-z", commit, "--", "scripts/sync.py").split(b"\t", 1)[0].split()
+    if len(metadata) != 3 or metadata[0] not in (b"100644", b"100755") or metadata[1] != b"blob":
+        raise SyncError("Kit commit is missing scripts/sync.py")
+    return canonical(git(directory, "cat-file", "blob", metadata[2].decode("ascii")))
 
 
 def render(files: dict[str, bytes], project: bytes, commit: str) -> dict[str, bytes]:
@@ -226,10 +251,10 @@ def preflight(root: Path, generated: dict[str, bytes], previous: dict[str, str])
             if not path.is_file():
                 conflicts.append(relative + " (not a file)")
                 continue
-            actual = digest(relative, path.read_bytes())
+            actual = digest(path.read_bytes())
             if relative not in previous:
                 conflicts.append(relative + " (unmanaged file already exists)")
-            elif actual != previous[relative] and (relative not in generated or actual != digest(relative, generated[relative])):
+            elif actual != previous[relative] and (relative not in generated or actual != digest(generated[relative])):
                 conflicts.append(relative + " (local edits)")
     return conflicts
 
@@ -246,7 +271,18 @@ def write_atomic(path: Path, content: bytes) -> None:
             os.unlink(temporary)
 
 
-def synchronize(args: argparse.Namespace, action: str) -> None:
+def delegate(script: bytes, args: argparse.Namespace, action: str) -> int:
+    """Hand the operation to the synchronizer committed with the kit version being applied."""
+    command = [action, args.target, *(["--source", args.source] if args.source else [])]
+    if action == "init":
+        command += ["--ref", args.ref, *(["--repo", args.repo] if args.repo else []), *(["--pinned"] if args.pinned else [])]
+    with tempfile.TemporaryDirectory(prefix="cg-kit-") as scratch:
+        path = Path(scratch) / "sync.py"
+        path.write_bytes(script)
+        return subprocess.call([sys.executable, str(path), *command])
+
+
+def synchronize(args: argparse.Namespace, action: str) -> int:
     root = Path(args.target).absolute()
     assert_plain_path(root)
     if root.exists() and not root.is_dir():
@@ -287,16 +323,21 @@ def synchronize(args: argparse.Namespace, action: str) -> None:
     if not initialize and not project_path.exists():
         raise SyncError(f"Missing project rules: {project_path}")
     with snapshot(config["repository"], ref, args.source) as (directory, commit):
-        files = kit_files(directory, commit)
+        script = kit_script(directory, commit)
+        files = kit_files(directory, commit) if script == canonical(Path(__file__).read_bytes()) else None
+    if files is None:
+        # Each kit commit renders with its own synchronizer; an older or edited copy only hands over.
+        print(f"Note: using the synchronizer committed in kit {commit[:12]}.", file=sys.stderr, flush=True)
+        return delegate(script, args, action)
     project = project_path.read_bytes() if project_path.exists() else files["templates/project.md"]
     generated = render(files, project, commit)
     new_lock = {"schema_version": VERSION, "commit": commit,
-                "files": {name: digest(name, data) for name, data in sorted(generated.items())}}
+                "files": {name: digest(data) for name, data in sorted(generated.items())}}
     if action == "check":
         changes = []
         for relative, content in generated.items():
             path = destination(root, relative)
-            if not path.is_file() or digest(relative, path.read_bytes()) != digest(relative, content):
+            if not path.is_file() or digest(path.read_bytes()) != digest(content):
                 changes.append(relative)
         for relative in previous.keys() - generated.keys():
             if destination(root, relative).exists():
@@ -307,7 +348,7 @@ def synchronize(args: argparse.Namespace, action: str) -> None:
             raise SyncError("Generated files differ from the locked kit/project rules:\n  " + "\n  ".join(changes) +
                             "\nRun sync after editing .ai/project.md; edit shared sources in the kit.")
         print(f"OK: {root.name} matches kit {commit[:12]}")
-        return
+        return 0
     conflicts = preflight(root, generated, previous)
     if conflicts:
         raise SyncError("No files changed. Resolve generated-file conflicts first:\n  " + "\n  ".join(conflicts) +
@@ -319,7 +360,7 @@ def synchronize(args: argparse.Namespace, action: str) -> None:
             raise SyncError(f"Expected regular file: {path}")
     for relative, content in generated.items():
         path = destination(root, relative)
-        if not path.exists() or path.read_bytes() != content:
+        if not path.exists() or digest(path.read_bytes()) != digest(content):  # keep equivalent checkouts
             write_atomic(path, content)
     for relative in previous.keys() - generated.keys():
         path = destination(root, relative)
@@ -327,10 +368,12 @@ def synchronize(args: argparse.Namespace, action: str) -> None:
             path.unlink()
     if initialize:
         if not project_path.exists():
-            write_atomic(project_path, canonical(".ai/project.md", project))
+            write_atomic(project_path, canonical(project))
         write_atomic(destination(root, ".ai/kit.json"), json_bytes(config))
-    write_atomic(destination(root, ".ai/kit.lock.json"), json_bytes(new_lock))
+    if new_lock != old_lock:  # an unchanged lock keeps its checkout line endings, so Git sees no edit
+        write_atomic(destination(root, ".ai/kit.lock.json"), json_bytes(new_lock))
     print(f"{action.capitalize()}: {root.name} uses kit {commit[:12]} ({len(generated)} generated files)", flush=True)
+    return 0
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -359,13 +402,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def launch(command: list[str], cwd: Path) -> int:
+    # CreateProcess ignores PATHEXT, so npm shims such as codex.cmd need an explicit lookup.
+    executable = shutil.which(command[0]) if os.name == "nt" else None
+    return subprocess.call([executable or command[0], *command[1:]], cwd=cwd)
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
-        synchronize(args, args.action)
-        if args.action == "run":
-            return subprocess.call(args.command, cwd=Path(args.target).absolute())
-        return 0
+        status = synchronize(args, args.action)
+        if status or args.action != "run":
+            return status
+        return launch(args.command, Path(args.target).absolute())
     except (SyncError, OSError, UnicodeError, ValueError) as exc:
         print(f"cg-agent-kit: {exc}", file=sys.stderr)
         return 1

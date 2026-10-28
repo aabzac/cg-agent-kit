@@ -1,16 +1,42 @@
 #!/usr/bin/env python3
 """Validate this kit's deliberately small, portable skill format (no dependencies)."""
+import importlib.util
+import os
 from pathlib import Path
 import re
+import subprocess
 import sys
+
+
+def load_sync():
+    spec = importlib.util.spec_from_file_location('cg_kit_sync', Path(__file__).resolve().with_name('sync.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def source_paths(root, sources):
+    """List kit sources as the next commit would contain them, including files not added yet."""
+    listing = subprocess.run(['git', '-C', str(root), 'ls-files', '-z', '--cached', '--others',
+                              '--exclude-standard', '--', *sources], capture_output=True, timeout=60)
+    if listing.returncode:
+        raise RuntimeError(listing.stderr.decode('utf-8', errors='replace').strip())
+    names = set(listing.stdout.decode('utf-8').split('\0')) - {''}
+    return sorted(name for name in names if os.path.lexists(root / name))
 
 
 def main():
     root = Path(__file__).resolve().parents[1]
     errors = []
-    for required in ('rules/common.md', 'templates/project.md', 'scripts/sync.py'):
-        if not (root / required).is_file():
-            errors.append(f'Missing {required}')
+    sync = load_sync()
+    try:
+        # The same rules as sync.py, so a layout that would break consumer updates fails here first.
+        names = source_paths(root, sync.KIT_SOURCES)
+        sync.check_kit_paths(names)
+        errors += [f'{name}: kit sources must be regular files, not links'
+                   for name in names if (root / name).is_symlink()]
+    except (OSError, RuntimeError, UnicodeError, subprocess.SubprocessError, sync.SyncError) as exc:
+        errors.append(f'Kit sources: {exc}')
     skills = sorted((root / 'skills').glob('*/SKILL.md'))
     if not skills:
         errors.append('No skills found')
