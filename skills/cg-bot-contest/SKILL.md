@@ -52,12 +52,14 @@ Build in this order; each item is small and unblocks the next.
    without timeout grace: timeouts!).
 5. `cgRender` exports validated replay data separately from read-only `cgValidate`.
    Serve the visualizer over localhost HTTP; check the available browser's access constraints.
-6. Docs: the working agreement (below), `docs/STATUS.md`, `docs/PLAN.md` (roadmap with
-   checkboxes), `docs/BOTS.md` (version table with bench numbers), `docs/DEVLOG.md` (hypothesis →
-   result → decision, failures included) and agent rules for engine fidelity and frozen versions.
-   STATUS is half a page: arena entry, league, boss id and rating, selected version, last verdict,
-   flags on. Keep it current; otherwise agents reconstruct state from megabytes of log and get it
-   wrong.
+6. Docs: the working agreement (below), `docs/STATUS.md`, `docs/SUMMARY.md` (for the user, in
+   their language: the state now, then 3-5 lines per decision, without hashes or ids),
+   `docs/PLAN.md` (roadmap with checkboxes), `docs/BOTS.md` (version table with bench numbers),
+   `docs/DEVLOG.md` (hypothesis → result → decision, failures included) and agent rules for
+   engine fidelity and frozen versions. STATUS is half a page of current state: arena entry,
+   league, boss id and rating, selected version, last verdict, flags on. Keep it current by
+   replacing lines, not appending history; otherwise agents reconstruct state from megabytes of
+   log and get it wrong.
 7. Use the project's version-control workflow; commit when requested or explicitly authorized
    by that project's standing policy. Keep compact regression fixtures and decision evidence;
    store large corpora/exports according to the project's storage policy with recoverable
@@ -93,10 +95,13 @@ a time:
    evidence, build with `submit`, then run `procCheck` on that exact artifact. Check applicable
    source-size limits; repeat artifact checks after packaging changes. See
    [architecture.md](architecture.md).
-5. Record outcomes (including inconclusive/rejected experiments) in BOTS/DEVLOG/STATUS and update
-   PLAN. Leave unpromoted flags off; do not silently replace the known-good submission. Review
-   closed experiments for removal from active code rather than accumulating disabled branches;
-   preserve the retained references and their verification as described in [architecture.md](architecture.md).
+5. Record outcomes (including inconclusive/rejected experiments) once, where the working agreement
+   puts each kind of record, and point to them elsewhere: the work and its evidence in DEVLOG,
+   versions and uploads in BOTS, the current state in STATUS, a tick with a pointer in PLAN. Add
+   3-5 lines per decision to the user's SUMMARY. Leave unpromoted flags off; do not silently
+   replace the known-good submission. Review closed experiments for removal from active code
+   rather than accumulating disabled branches; preserve the retained references and their
+   verification as described in [architecture.md](architecture.md).
 
 ## Opponent model and search
 

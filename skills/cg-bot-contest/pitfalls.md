@@ -90,5 +90,12 @@
   Track King the arena ran an older candidate for two weeks while the selected version's upload
   stayed unticked). Archive closed periods losslessly; distinguish selected version, current
   arena agent/configuration and pending upload rather than appending history to the active status.
+- Repeated records: copying each result into every document makes commits too long to follow and
+  loads history into every session. In Code Royale (2026-10-30) an upload commit repeated the same
+  numbers in 100-130 lines of text over 8-9 files besides its JSON evidence, and the current-state
+  section of `.ai/project.md`, loaded into every session through `AGENTS.md`, had grown to 10.6 KB.
+  Write each fact once and point to it; give the user a short summary of their own
+  (`docs/SUMMARY.md` there since `8ad5492`, in Russian: the state now, then 3-5 lines per
+  decision, without hashes or ids).
 - When the next step requires the user's upload or arena observation, identify the verified
   artifact and the requested action; do not silently start another tuning cycle.

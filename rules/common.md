@@ -56,6 +56,14 @@
 - Keep compact machine-readable evidence and decision summaries in Git. Store heavy
   corpora/archives at a declared durable location with hashes and retrieval details;
   archive closed log periods without losing evidence or breaking references.
+- Keep a short summary for the user apart from the agents' records and update it after each
+  arena upload, experiment or decision: the state now, then a few lines per decision in the
+  user's language, without hashes or ids. Name its file and language, and where each kind
+  of agent record lives, in `.ai/project.md`.
+- Give every fact one place among the agents' records; other documents point to it instead
+  of repeating it. Keep the status page to the current state by replacing lines, not
+  appending history. Keep results and history out of context loaded into every session: the
+  current-state section of `.ai/project.md` only points to the files that hold the state.
 - Retire rejected/parked code deliberately with its obsolete tests and entry points;
   keep checks for retained behavior and reference opponents. Verify retained artifact
   or decision equivalence. A failing test alone is not a reason to delete it.
