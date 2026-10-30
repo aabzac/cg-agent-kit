@@ -82,15 +82,31 @@ code or defaults: record a new revision. See the source/configuration requiremen
   invalid replay pools fail. Deduplicate initialization hashes for independent-map accounting.
 - `ProcessBot`: runs `java -cp build/submit/classes Player` (or any command) over the text
   protocol with per-turn timeouts; `ProcessCheck` plays it on both seats vs an in-process bot and
-  fails on timeouts/protocol errors. Prefer no timeout grace; measure full startup and later-turn
-  response times, and disclose any local grace used. Local hardware is not CG's; process checks
-  complement aligned search budgets and arena evidence, rather than guaranteeing server timing.
+  fails on timeouts/protocol errors, extra stdout lines and unexpected stderr. It also replays
+  every game with the in-process source bot under the artifact's parameters and requires the same
+  command lines from both players (a documented marker excepted), so it catches packaging that
+  changes play on the positions reached; a game where either run lost a player cannot be compared
+  and fails. This does not test the bot's logic. Prefer no timeout grace; measure full startup
+  and later-turn response times, and disclose any local grace used. Local hardware is not CG's;
+  process checks complement aligned search budgets and arena evidence, rather than guaranteeing
+  server timing.
 
 ## Submission artifact
 
 Run `submit` BEFORE `procCheck`; verify the artifact produced from the candidate configuration,
 not a stale previously built Player. Record source revision, effective parameters and artifact
 hash for the version handed to the user. Experimental runs must not silently replace it.
+
+Make the artifact's bytes depend only on the code (fixed encoding, line endings and file order),
+so its hash identifies it. Print a short build id where replays keep it (`cg-fetch-replays`): a
+hash prefix of the artifact with its own id literal blank. Derive a configuration id from
+strategy code and parameters only, so builds that differ just in the runner or marker count as
+one configuration in repeated uploads (`cg-promote-bot`); a runner change can still change play,
+so such a build still passes `procCheck`. Every build overwrites `build/`: keep the rollback
+artifact as a commit whose `submit` rebuilds it byte for byte, checked on a clean export of that
+commit, plus a kept copy named by its hash. Replace the previous artifact only after the new one
+compiles. Source lesson: Code Royale, 2026-10-29/30 (`docs/arena-uploads.md`); every marked
+artifact matched the in-process bot in all games of both 200-game `procCheck` runs.
 
 Check the current contest's source-size limit and its counting convention (bytes/characters).
 Default-off code can still enlarge the submission or allocate startup buffers; keep a per-feature

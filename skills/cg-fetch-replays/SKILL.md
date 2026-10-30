@@ -135,9 +135,23 @@ history may omit IDE games. Respect rate limits with paced calls/backoff. Record
 attempts separately from completed games; never discard an executed bot failure as transport.
 
 For build attribution, emit a short version/configuration marker through a game-supported
-message channel retained in canonical replays (stderr may be absent). Match it to an immutable
-local artifact manifest; missing/unknown markers stay unknown. This is self-reported identity,
-not remote execution attestation; the requested build or destination folder is insufficient.
+message channel retained in canonical replays (stderr may be absent). Without such a channel a
+command the referee rejects harmlessly can carry it (Code Royale: the build id as a turn-0 `TRAIN`
+of site ids, only warned about while no barracks exist). Establish from the referee source and
+replays that it cannot remove the bot, and confirm on the first marked upload that every game
+carries it and the simulator reproduces its warning. Match the marker to an immutable local
+artifact manifest; missing/unknown markers stay unknown. This is self-reported identity, not
+remote execution attestation; the requested build or destination folder is insufficient.
+
+To check which code played, replay each downloaded arena game through the validated simulator:
+on every turn with a confirmed state, compare the output of a kept copy of the uploaded artifact
+with the agent's recorded stdout, then continue with both players' recorded commands. Verdicts:
+SAME (all recorded turns compared, no difference), DIFF (a difference, or no answer where the
+agent answered), PARTIAL (no difference, some turns not compared) or ERROR; the upload is
+confirmed only when every game is SAME. SAME confirms the play, the marker names the build. The
+same replay with another bot counts the games a change touched. Code Royale found all 420
+placement games of seven uploads SAME, and v02's UNSTICK changed 2 and 4 of 60 games compared
+with v01. Agreement covers the positions reached; it is not attestation of the code.
 
 An IDE rerun is a new simulation, not necessarily playback of the downloaded historical game:
 code, configuration and randomness can differ. Stderr export is debugging evidence, not a

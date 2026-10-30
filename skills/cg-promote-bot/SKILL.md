@@ -77,9 +77,10 @@ keep [that alternative](references/practical-300-1000.md); do not mix it with BT
    through placement: a league promotion at its end can replace the agent and drop its games.
    Use `cg-fetch-replays`. Keep the selected rollback artifact available throughout the trial.
 8. Record each upload's agent id, artifact hash, source/configuration identity, league, time,
-   placement-completion signal and FIRST completed placement score. Multiple snapshots of one
-   upload are not multiple placements. Do not mix partial-placement scores with completed ones
-   unless the policy names the exception, such as a placement cut short by a league promotion.
+   placement-completion signal, FIRST completed placement score and whether its games replay
+   as the artifact (`cg-fetch-replays`). Multiple snapshots of one upload are not multiple
+   placements. Do not mix partial-placement scores with completed ones unless the policy names
+   the exception, such as a placement cut short by a league promotion.
 9. Apply the predeclared arena rule only after the required candidate and baseline evidence is
    complete, except for an explicitly allowed early rollback. Compare placement scores within
    one league only; after a league promotion, rebuild the selected version's baseline there.
