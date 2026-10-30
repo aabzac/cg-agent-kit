@@ -96,6 +96,8 @@
   section of `.ai/project.md`, loaded into every session through `AGENTS.md`, had grown to 10.6 KB.
   Write each fact once and point to it; give the user a short summary of their own
   (`docs/SUMMARY.md` there since `8ad5492`, in Russian: the state now, then 3-5 lines per
-  decision, without hashes or ids).
+  decision, without hashes or ids). A twin is a copy too: the English Markdown twin of the Russian
+  architecture page there, written in the same commit, held test names and a timing threshold that
+  the page lacked, so the details moved into the page and only the page was kept.
 - When the next step requires the user's upload or arena observation, identify the verified
   artifact and the requested action; do not silently start another tuning cycle.

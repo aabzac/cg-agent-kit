@@ -61,8 +61,9 @@
   user's language, without hashes or ids. Name its file and language, and where each kind
   of agent record lives, in `.ai/project.md`.
 - Give every fact one place among the agents' records; other documents point to it instead
-  of repeating it. Keep the status page to the current state by replacing lines, not
-  appending history. Keep results and history out of context loaded into every session: the
+  of repeating it. Keep one copy of each document, without a twin in another language or
+  format. Keep the status page to the current state by replacing lines, not appending
+  history. Keep results and history out of context loaded into every session: the
   current-state section of `.ai/project.md` only points to the files that hold the state.
 - Retire rejected/parked code deliberately with its obsolete tests and entry points;
   keep checks for retained behavior and reference opponents. Verify retained artifact

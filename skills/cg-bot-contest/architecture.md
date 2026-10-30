@@ -18,7 +18,7 @@ src/main/resources/<pkg>/bot/versions/vNN.properties  frozen effective parameter
 src/test/java/<pkg>/core      JUnit 5 rules tests (+ ASCII map builder)
 visualizer/index.html         canvas viewer, ?file=<replay json>
 docs/rules/<league>.md        statements verbatim; inferred rules in a separate file
-docs/STATUS.md SUMMARY.md PLAN.md BOTS.md DEVLOG.md replay_format.md
+docs/STATUS.md SUMMARY.md PLAN.md BOTS.md DEVLOG.md bot-architecture.html replay_format.md
 AGENTS.md  README.md          agent rules; with cg-agent-kit edit .ai/project.md instead
 replays/local replays/cg replays/rendered      gitignored corpora/derived files
 ```

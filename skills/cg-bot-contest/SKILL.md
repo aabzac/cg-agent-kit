@@ -69,6 +69,11 @@ Build in this order; each item is small and unblocks the next.
 
 - v00 = trivial legal bot, v01 = greedy. Submit as early as possible: leaving Wood exposes the full
   statement. By default the user pastes the verified submission; identify the exact artifact.
+- Once v01 plays, describe it in `docs/bot-architecture.html` for the user, in their language: one
+  turn from stdin to stdout, the decision rules as diagrams, pseudocode, parameters and versions, a
+  source map and what the bot does not do. Agents read the same page, so keep no Markdown or
+  translated twin. Keep it one file; if its diagrams load a script from a CDN, pin the version and
+  keep their source readable without it. Update it when the selected version's rules change.
 - After each promotion: capture statement, reconcile with inferred rules, add tests, re-run
   `cgValidate`. Arena scores restart in the new league: rebuild the selected version's arena
   baseline there and revalidate boss-based controls and proxies before the next decision.
@@ -98,10 +103,11 @@ a time:
 5. Record outcomes (including inconclusive/rejected experiments) once, where the working agreement
    puts each kind of record, and point to them elsewhere: the work and its evidence in DEVLOG,
    versions and uploads in BOTS, the current state in STATUS, a tick with a pointer in PLAN. Add
-   3-5 lines per decision to the user's SUMMARY. Leave unpromoted flags off; do not silently
-   replace the known-good submission. Review closed experiments for removal from active code
-   rather than accumulating disabled branches; preserve the retained references and their
-   verification as described in [architecture.md](architecture.md).
+   3-5 lines per decision to the user's SUMMARY and update the architecture page when the selected
+   rules change. Leave unpromoted flags off; do not silently replace the known-good submission.
+   Review closed experiments for removal from active code rather than accumulating disabled
+   branches; preserve the retained references and their verification as described in
+   [architecture.md](architecture.md).
 
 ## Opponent model and search
 
